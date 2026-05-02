@@ -1,0 +1,10 @@
+[tool.basedpyright]
+pythonVersion = "3.10"
+pythonPlatform = "Linux"
+
+include = ["src"]
+
+typeCheckingMode = "strict"
+
+reportAny = false
+reportExplicitAny = false
