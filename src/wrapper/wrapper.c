@@ -18,9 +18,10 @@ static u32 _touched_list_len = 0;
 
 static CPU_TestCase _test_case = {};
 static u8 _current_fc = 0;
-static bool _trace_enabled = false;
 
 static const u16 _monitored_vecs[] = { 4, 10, 11 }; // ILLEGAL, LINEA, LINEF
+static u64 _instr_count = 0;
+static bool _trace_enabled = false;
 static bool _was_init = false;
 
 #define FATAL_EXIT(...) _fatal_exit(__func__, __LINE__, __VA_ARGS__)
@@ -130,6 +131,26 @@ static void _install_vec_markers() {
 		cpu_write_word((u32)(vec * 4) + 2, (u16)(pc & 0xffff));
 		cpu_write_word(pc, 0x60fe); // BRA.S -2
 	}
+}
+
+static bool _is_pc_marker(u32 pc) {
+	for (u32 i = 0; i < sizeof(_monitored_vecs) / sizeof(_monitored_vecs[0]); i += 1) {
+		u16 vec = _monitored_vecs[i];
+		u32 vec_addr = _vec_address(vec);
+		if (pc == vec_addr || pc == (vec_addr + 2)) {
+			_test_case.exception_vector = vec;
+			if (vec == 4)
+				_test_case.exec_result = CPU_EXEC_ILLEGAL;
+			if (vec == 10)
+				_test_case.exec_result = CPU_EXEC_LINEA;
+			if (vec == 11)
+				_test_case.exec_result = CPU_EXEC_LINEF;
+
+			return true;
+		}
+	}
+
+	return false;
 }
 
 bool cpu_init() {
@@ -247,27 +268,31 @@ void cpu_reset() {
 	m68k_pulse_reset();
 }
 
-u32 cpu_execute(u32 cycles) {
+u32 cpu_execute(u32 total_budget, u32 step_budget) {
 	_install_vec_markers();
-	u32 used_cycles = m68k_execute(cycles);
-	_test_case.cycles += used_cycles;
 
-	u32 pc = m68k_get_reg(nullptr, M68K_REG_PC);
-	for (u32 i = 0; i < sizeof(_monitored_vecs) / sizeof(_monitored_vecs[0]); i += 1) {
-		u16 vec = _monitored_vecs[i];
-		u32 vec_addr = _vec_address(vec);
-		if (pc == vec_addr || pc == (vec_addr + 2)) {
-			_test_case.exception_vector = vec;
-			if (vec == 4)
-				_test_case.exec_result = CPU_EXEC_ILLEGAL;
-			if (vec == 10)
-				_test_case.exec_result = CPU_EXEC_LINEA;
-			if (vec == 11)
-				_test_case.exec_result = CPU_EXEC_LINEF;
-		}
+	u32 used_total = 0;
+	if (step_budget == 0)
+		step_budget = 4;
+
+	u64 start = _instr_count;
+	while (used_total < total_budget) {
+		u32 remain = total_budget - used_total;
+		u32 slice = (remain < step_budget) ? remain : step_budget;
+
+		u32 used = m68k_execute(slice);
+		used_total += used;
+
+		u32 pc = m68k_get_reg(nullptr, M68K_REG_PC);
+		if (_is_pc_marker(pc))
+			break; // stop at marker
+
+		if (_instr_count > start)
+			break; // execute only 1 instruction
 	}
 
-	return used_cycles;
+	_test_case.cycles += used_total;
+	return used_total;
 }
 
 u32 cpu_get_reg(u8 reg) {
@@ -357,6 +382,12 @@ i32 cpu_tas() {
 	return 1;
 }
 
+void cpu_instruction_hook(u32 pc) {
+	(void)pc;
+	_instr_count += 1;
+}
+
+// Musashi symbols
 extern u32 m68k_read_memory_8(u32 addr) {
 	return cpu_read_byte(addr);
 }

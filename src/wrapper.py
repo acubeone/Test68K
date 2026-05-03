@@ -120,9 +120,8 @@ _lib.cpu_clear_ram.restype = None
 _lib.cpu_reset.argtypes = []
 _lib.cpu_reset.restype = None
 
-
-# u32 cpu_execute(u32);
-_lib.cpu_execute.argtypes = [C.c_uint32]
+# u32 cpu_execute(u32, u32)
+_lib.cpu_execute.argtypes = [C.c_uint32, C.c_uint32]
 _lib.cpu_execute.restype = C.c_uint32
 
 # u32 cpu_get_reg(u8)
@@ -266,8 +265,8 @@ class CPU:
 	def set_test_case_name(self, name: str) -> None:
 		_lib.cpu_set_test_case_name(name.encode())
 
-	def execute(self, cycles: int) -> int:
-		return int(_lib.cpu_execute(cycles))
+	def execute(self, total_budget: int, step_budget: int = 4) -> int:
+		return int(_lib.cpu_execute(total_budget, step_budget))
 
 	def get_reg(self, reg: str) -> int:
 		return int(_lib.cpu_get_reg(REG_NAMES.index(reg)))

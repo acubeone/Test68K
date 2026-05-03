@@ -99,7 +99,7 @@ void cpu_set_test_case_name(const char *name);
 
 void cpu_clear_ram();
 void cpu_reset();
-u32 cpu_execute(u32 cycles); // Return used cycles
+u32 cpu_execute(u32 total_budget, u32 step_budget); // Return used cycles
 
 u32 cpu_get_reg(u8 reg);
 void cpu_set_reg(u8 reg, u32 data);
@@ -112,3 +112,4 @@ void cpu_write_word(u32 addr, u16 word);
 // Musashi callbacks
 void cpu_set_fc(u8 fc);
 i32 cpu_tas();
+void cpu_instruction_hook(u32 pc);

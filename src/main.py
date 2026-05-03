@@ -1,5 +1,8 @@
 import argparse
 from pathlib import Path
+import pprint
+import random
+import sys
 from typing import Any
 import wrapper
 
@@ -11,6 +14,14 @@ VECTORS: list[int] = [
 	0x0002_FFF0,  # Initial SSP
 	0x0000_1000,  # Initial PC
 	*[0x00_0800 + (vec * 0x10) for vec in range(2, 256)],
+]
+
+
+INSTRS = [
+	[0x4E71],  # NOP
+	[0x4AFC],  # ILLEGAL
+	[0xA000],  # LINE-A
+	[0xF000],  # LINE-F
 ]
 
 
@@ -26,8 +37,11 @@ def _parse_args() -> argparse.Namespace:
 	_ = parser.add_argument(
 		"--max-tests",
 		type=int,
-		default=256,
+		default=2,
 		help="How many generated tests for each instruction",
+	)
+	_ = parser.add_argument(
+		"--seed", type=int, default=None, help="Default random seed"
 	)
 
 	return parser.parse_args()
@@ -62,7 +76,7 @@ def _run_test_case(
 		cpu.set_reg(wrapper.REG_NAMES[i], reg)
 
 	disasm = cpu.disasm_at(ROM_ADDR[0])
-	cpu.set_test_case_name(f"{id} {disasm} {hex(op_words[0])}")
+	cpu.set_test_case_name(f"{id} {disasm} {op_words[0]:x}")
 
 	cpu.capture_pre()
 	cpu.execute(CYCLES_BUDGET)
@@ -71,11 +85,43 @@ def _run_test_case(
 	return cpu.query_test_case()
 
 
+def _rand_regs(rng: random.Random) -> list[int]:
+	regs = [rng.getrandbits(32) for _ in range(wrapper.REG_COUNT)]
+	regs[wrapper.REG_NAMES.index("pc")] = ROM_ADDR[0]
+	regs[wrapper.REG_NAMES.index("sp")] = VECTORS[0]
+	regs[wrapper.REG_NAMES.index("a7")] = VECTORS[0]
+	regs[wrapper.REG_NAMES.index("sr")] = rng.getrandbits(16)
+	return regs
+
+
+def _rand_ram(rng: random.Random, n: int = 256) -> list[int]:
+	return [rng.getrandbits(8) for _ in range(n)]
+
+
+def _generate_batch(outdir: Path, max_tests: int, seed: int) -> None:
+	cpu = wrapper.CPU()
+	seed = seed or random.randint(0, sys.maxsize)
+
+	for op_words in INSTRS:
+		for i in range(max_tests):
+			rng = random.Random(seed)
+
+			regs = _rand_regs(rng)
+			ram = _rand_ram(rng)
+
+			case = _run_test_case(
+				cpu, i, regs, op_words, ram, wrapper.MODEL_M68000, seed
+			)
+			pprint.pp(case)
+
+
 def main() -> None:
 	args = _parse_args()
 	if not args.out.is_dir():
 		args.out.mkdir(parents=True, exist_ok=True)
-	outpath = args.out
-	max_tests = args.max_tests
 
-	cpu = wrapper.CPU()
+	_generate_batch(args.out, args.max_tests, args.seed)
+
+
+if __name__ == "__main__":
+	main()
