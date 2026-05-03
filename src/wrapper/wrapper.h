@@ -86,15 +86,19 @@ typedef struct CPU_TestCase {
 bool cpu_init();
 void cpu_deinit();
 
-void cpu_begin_test_case(const char *name, CPU_Model model, u64 seed);
+void cpu_begin_test_case(CPU_Model model, u64 seed);
 void cpu_query_test_case(CPU_TestCase *test);
 
 void cpu_capture_pre();
 void cpu_capture_post();
 
+void cpu_disasm_at(u32 pc, char *out, u32 out_len);
+
+void cpu_set_op_words(const u16 *words, u8 count);
+void cpu_set_test_case_name(const char *name);
+
 void cpu_clear_ram();
 void cpu_reset();
-void cpu_set_op_words(const u16 *words, u8 count);
 u32 cpu_execute(u32 cycles); // Return used cycles
 
 u32 cpu_get_reg(u8 reg);

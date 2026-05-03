@@ -30,6 +30,7 @@ add_custom_target(
 
 add_library(${PROJECT_NAME} STATIC
 	"${MUSASHI_DIR}/m68kcpu.c"
+	"${MUSASHI_DIR}/m68kdasm.c"
 	"${MUSASHI_DIR}/softfloat/softfloat.c"
 	"${MUSASHI_GEN_C}"
 )

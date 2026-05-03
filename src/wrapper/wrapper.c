@@ -169,18 +169,12 @@ void cpu_deinit() {
 	_was_init = false;
 }
 
-void cpu_begin_test_case(const char *name, CPU_Model model, u64 seed) {
-	assert(name);
-
+void cpu_begin_test_case(CPU_Model model, u64 seed) {
 	if (model == CPU_MODEL_M68010)
 		m68k_set_cpu_type(M68K_CPU_TYPE_68010);
 	else
 		m68k_set_cpu_type(M68K_CPU_TYPE_68000);
 	memset(&_test_case, 0, sizeof(CPU_TestCase));
-	cpu_clear_ram();
-
-	strncpy(_test_case.name, name, CPU_MAX_NAME_LEN);
-	_test_case.name[CPU_MAX_NAME_LEN - 1] = '\0';
 
 	_test_case.model = model;
 	_test_case.seed = seed;
@@ -214,13 +208,14 @@ void cpu_capture_post() {
 	_trace_enabled = false;
 }
 
-void cpu_clear_ram() {
-	assert(_ram);
-	memset(_ram, 0, CPU_MAX_RAM);
-}
+void cpu_disasm_at(u32 pc, char *out, u32 out_len) {
+	if (!out || out_len == 0)
+		return;
 
-void cpu_reset() {
-	m68k_pulse_reset();
+	char tmp[CPU_MAX_NAME_LEN] = { 0 };
+	u32 cpu_type = m68k_get_reg(nullptr, M68K_REG_CPU_TYPE);
+	m68k_disassemble(tmp, pc, cpu_type);
+	snprintf(out, out_len, "%s", tmp);
 }
 
 void cpu_set_op_words(const u16 *words, u8 count) {
@@ -233,6 +228,23 @@ void cpu_set_op_words(const u16 *words, u8 count) {
 	for (u8 i = 0; i < count; i += 1) {
 		_test_case.op_words[i] = words[i];
 	}
+}
+
+void cpu_set_test_case_name(const char *name) {
+	if (!name)
+		return;
+
+	strncpy(_test_case.name, name, CPU_MAX_NAME_LEN);
+	_test_case.name[CPU_MAX_NAME_LEN - 1] = '\0';
+}
+
+void cpu_clear_ram() {
+	assert(_ram);
+	memset(_ram, 0, CPU_MAX_RAM);
+}
+
+void cpu_reset() {
+	m68k_pulse_reset();
 }
 
 u32 cpu_execute(u32 cycles) {
@@ -345,31 +357,6 @@ i32 cpu_tas() {
 	return 1;
 }
 
-i32 cpu_exception_illegal(u16 opcode) {
-	u8 class = (opcode & 0xf000) >> 12;
-	if (class == 0x0a) {
-		_test_case.exec_result = CPU_EXEC_LINEA;
-		_test_case.exception_vector = 0x0a;
-		return 0;
-	}
-
-	if (class == 0x0f) {
-		_test_case.exec_result = CPU_EXEC_LINEF;
-		_test_case.exception_vector = 0x0b;
-		return 0;
-	}
-
-	_test_case.exec_result = CPU_EXEC_ILLEGAL;
-	_test_case.exception_vector = 0x04;
-	return 0;
-}
-
-i32 cpu_exception_trap(u8 trap) {
-	_test_case.exec_result = CPU_EXEC_TRAP;
-	_test_case.exception_vector = 0x20 + trap;
-	return 0;
-}
-
 extern u32 m68k_read_memory_8(u32 addr) {
 	return cpu_read_byte(addr);
 }
@@ -393,4 +380,12 @@ extern void m68k_write_memory_16(u32 addr, u32 value) {
 extern void m68k_write_memory_32(u32 addr, u32 value) {
 	cpu_write_word(addr, (value >> 16) & 0xffff);
 	cpu_write_word(addr + 2, value & 0xffff);
+}
+
+extern u32 m68k_read_disassembler_16(u32 addr) {
+	return m68k_read_memory_16(addr);
+}
+
+extern u32 m68k_read_disassembler_32(u32 addr) {
+	return m68k_read_memory_32(addr);
 }
