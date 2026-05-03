@@ -64,18 +64,4 @@ function(set_default_warnings target)
 		UNKNOWN_MESSAGE
 			"Compiler is not known, cannot set warnings."
 	)
-
-	if(WARNINGS_AS_ERRORS)
-		set_target_warnings(
-			${target}
-			MSVC
-				"/WX"
-			CLANG
-				"-Werror"
-			GCC
-				"-Werror"
-			UNKNOWN_MESSAGE
-				"Compiler is not known, cannot set warnings as errors."
-		)
-	endif()
 endfunction()
