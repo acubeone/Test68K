@@ -1,3 +1,9 @@
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "tab"
+docstring-code-format = true
+line-ending = "lf"
+
 [tool.basedpyright]
 pythonVersion = "3.10"
 pythonPlatform = "Linux"

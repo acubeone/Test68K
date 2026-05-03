@@ -43,3 +43,9 @@ target_include_directories(
 )
 
 target_link_libraries(${PROJECT_NAME} PUBLIC m)
+
+set_target_properties(
+	${PROJECT_NAME}
+	PROPERTIES
+		POSITION_INDEPENDENT_CODE ON
+)
