@@ -108,5 +108,3 @@ void cpu_write_word(u32 addr, u16 word);
 // Musashi callbacks
 void cpu_set_fc(u8 fc);
 i32 cpu_tas();
-i32 cpu_exception_illegal(u16 opcode);
-i32 cpu_exception_trap(u8 trap);

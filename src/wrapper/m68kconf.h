@@ -161,7 +161,7 @@
  * m68k_set_illg_instr_callback explicitly.
  */
 #	ifndef M68K_ILLG_HAS_CALLBACK
-#		define M68K_ILLG_HAS_CALLBACK	   M68K_OPT_SPECIFY_HANDLER
+#		define M68K_ILLG_HAS_CALLBACK	   M68K_OPT_OFF
 #		define M68K_ILLG_CALLBACK(opcode) cpu_exception_illegal(opcode)
 #	endif
 
@@ -176,7 +176,7 @@
  */
 #	ifndef M68K_TRAP_HAS_CALLBACK
 #		define M68K_TRAP_HAS_CALLBACK	 M68K_OPT_OFF
-#		define M68K_TRAP_CALLBACK(trap) your_op_trap_handler_function(trap)
+#		define M68K_TRAP_CALLBACK(trap) cpu_exception_trap(trap)
 #	endif
 
 /* If ON, CPU will call the set fc callback on every memory access to

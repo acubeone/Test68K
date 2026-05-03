@@ -1,5 +1,6 @@
 import os
 import ctypes as C
+from typing import Any
 
 _lib = C.CDLL(os.environ["T68K_WRAPPER_LIB"])
 
@@ -16,18 +17,18 @@ MODEL_M68000 = 0
 MODEL_M68010 = 1
 
 # CPU_ExecResult
-CPU_EXEC_OK = 0
-CPU_EXEC_ILLEGAL = 1  # Exception: Illegal
-CPU_EXEC_LINEA = 2  # Exception: Line-A
-CPU_EXEC_LINEF = 3  # Exception: Line-F
-CPU_EXEC_ADDR = 4  # Exception: Address Error
-CPU_EXEC_TRAP = 5  # Exception: TRAP #N
-CPU_EXEC_TAS = 6  # Exception: TAS
-CPU_EXEC_OTHER = 7  # Other exception
+EXEC_OK = 0
+EXEC_ILLEGAL = 1  # Exception: Illegal
+EXEC_LINEA = 2  # Exception: Line-A
+EXEC_LINEF = 3  # Exception: Line-F
+EXEC_ADDR = 4  # Exception: Address Error
+EXEC_TRAP = 5  # Exception: TRAP #N
+EXEC_TAS = 6  # Exception: TAS
+EXEC_OTHER = 7  # Other exception
 
 # CPU_MemOpKind
-CPU_MEM_READ = 0
-CPU_MEM_WRITE = 1
+MEM_READ = 0
+MEM_WRITE = 1
 
 
 class RamByte(C.Structure):
@@ -168,6 +169,10 @@ _reg_names = [
 ]
 
 
+def _decode_ctr(buf: bytes) -> str:
+    return buf.split(b"\x00", 1)[0].decode("utf-8", errors="replace")
+
+
 class CPU:
     def __init__(self):
         res = _lib.cpu_init()
@@ -185,10 +190,53 @@ class CPU:
     def begin_test_case(self, name: str, model: int, seed: int) -> None:
         _lib.cpu_begin_test_case(name.encode(), C.c_uint32(model), C.c_uint64(seed))
 
-    def query_test_case(self) -> TestCase:
+    def query_test_case(self) -> dict[str, Any]:
         test = TestCase()
         _lib.cpu_query_test_case(C.byref(test))
-        return test
+
+        pre_ram = [
+            {"addr": int(test.pre.ram[i].addr), "byte": int(test.pre.ram[i].byte)}
+            for i in range(int(test.pre.ram_len))
+        ]
+        post_ram = [
+            {"addr": int(test.post.ram[i].addr), "byte": int(test.post.ram[i].byte)}
+            for i in range(int(test.post.ram_len))
+        ]
+
+        mem_ops = [
+            {
+                "kind": int(test.mem_ops[i].kind),
+                "addr": int(test.mem_ops[i].addr),
+                "data": int(test.mem_ops[i].data),
+                "fc": int(test.mem_ops[i].fc),
+                "is_word": bool(test.mem_ops[i].is_word),
+            }
+            for i in range(test.mem_op_len)
+        ]
+
+        return {
+            "name": _decode_ctr(test.name),
+            "model": int(test.model),
+            "seed": int(test.seed),
+            "op_words": [int(test.op_words[i]) for i in range(int(test.op_word_count))],
+            "pre": {
+                "regs": [int(test.pre.regs[i]) for i in range(REG_COUNT)],
+                "ram": pre_ram,
+            },
+            "post": {
+                "regs": [int(test.post.regs[i]) for i in range(REG_COUNT)],
+                "ram": post_ram,
+            },
+            "mem_ops": mem_ops,
+            "cycles": int(test.cycles),
+            "exec_result": int(test.exec_result),
+            "exception_vector": int(test.exception_vector),
+            "overflow": {
+                "mem_ops": bool(test.mem_ops_overflow),
+                "ram_diff": bool(test.ram_diff_overflow),
+                "touched_list": bool(test.touched_list_overflow),
+            },
+        }
 
     def capture_pre(self) -> None:
         _lib.cpu_capture_pre()

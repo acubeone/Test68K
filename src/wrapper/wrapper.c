@@ -20,6 +20,9 @@ static CPU_TestCase _test_case = {};
 static u8 _current_fc = 0;
 static bool _trace_enabled = false;
 
+static const u16 _monitored_vecs[] = { 4, 10, 11 }; // ILLEGAL, LINEA, LINEF
+static bool _was_init = false;
+
 #define FATAL_EXIT(...) _fatal_exit(__func__, __LINE__, __VA_ARGS__)
 
 [[noreturn]]
@@ -115,7 +118,24 @@ static void _ram_diff(CPU_State *pre, CPU_State *post) {
 	}
 }
 
+static inline u32 _vec_address(u32 vec) {
+	return 0x00'0800 + (vec * 0x10);
+}
+
+static void _install_vec_markers() {
+	for (u32 i = 0; i < sizeof(_monitored_vecs) / sizeof(_monitored_vecs[0]); i += 1) {
+		u16 vec = _monitored_vecs[i];
+		u32 pc = _vec_address(vec);
+		cpu_write_word((u32)vec * 4, (u16)(pc >> 16));
+		cpu_write_word((u32)(vec * 4) + 2, (u16)(pc & 0xffff));
+		cpu_write_word(pc, 0x60fe); // BRA.S -2
+	}
+}
+
 bool cpu_init() {
+	if (_was_init)
+		return true;
+
 	_ram = malloc(CPU_MAX_RAM);
 	if (!_ram)
 		FATAL_EXIT("Failed to allocate RAM");
@@ -128,10 +148,14 @@ bool cpu_init() {
 		FATAL_EXIT("Failed to allocate resources");
 
 	m68k_init();
+	_was_init = true;
 	return true;
 }
 
 void cpu_deinit() {
+	if (!_was_init)
+		return;
+
 	if (_ram)
 		free(_ram);
 
@@ -141,6 +165,8 @@ void cpu_deinit() {
 		free(_pre_set);
 	if (_touched_set)
 		free(_touched_set);
+
+	_was_init = false;
 }
 
 void cpu_begin_test_case(const char *name, CPU_Model model, u64 seed) {
@@ -210,8 +236,25 @@ void cpu_set_op_words(const u16 *words, u8 count) {
 }
 
 u32 cpu_execute(u32 cycles) {
+	_install_vec_markers();
 	u32 used_cycles = m68k_execute(cycles);
 	_test_case.cycles += used_cycles;
+
+	u32 pc = m68k_get_reg(nullptr, M68K_REG_PC);
+	for (u32 i = 0; i < sizeof(_monitored_vecs) / sizeof(_monitored_vecs[0]); i += 1) {
+		u16 vec = _monitored_vecs[i];
+		u32 vec_addr = _vec_address(vec);
+		if (pc == vec_addr || pc == (vec_addr + 2)) {
+			_test_case.exception_vector = vec;
+			if (vec == 4)
+				_test_case.exec_result = CPU_EXEC_ILLEGAL;
+			if (vec == 10)
+				_test_case.exec_result = CPU_EXEC_LINEA;
+			if (vec == 11)
+				_test_case.exec_result = CPU_EXEC_LINEF;
+		}
+	}
+
 	return used_cycles;
 }
 
