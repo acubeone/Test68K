@@ -1,0 +1,78 @@
+; little-endian
+; 4-bytes alignment
+
+file-format:
+	[header]
+	[entry0]
+	[blob0]
+	[entry1]
+	[blob1]
+	...
+	[entryN]
+	[blobN]
+
+
+[header]
+header + 0x00 -> MAGIC_WORD : u8[4]
+	content: 0x54 0x36 0x38 0x4b ; ASCII: T68K
+header + 0x04 -> VERSION : u16
+	content: 0x01 0x00 ; Version 1
+header + 0x06 -> RESERVED : u8[2]
+	content: 0x00 0x00
+header + 0x08 -> ENTRY_COUNT : u32
+	content: 0xffff_ffff is unknown/streaming
+header + 0x0c -> RESERVED : u8[4]
+	content: 0x00 0x00 0x00 0x00
+
+[entry]
+entry + 0x00 -> MAGIC_WORD : u8[4]
+	content: 0x54 0x43 0x53 0x31
+entry + 0x04 -> ENTRY_LEN : u32
+	content: blob bytes length (includes padding)
+entry + 0x08 -> BLOB : variable
+	content: [blob]
+
+[blob - ordered]
+	seed : u64
+	model : u32 (0=68000, 1=68010)
+	name_len : u32
+	name : u8[name_len]
+	padding : u8[] ; align to 4-bytes boundary
+
+	op_word_count : u32
+	op_words : u16[op_word_count]
+	padding : u8[] ; align to 4-bytes boundary
+
+	pre_regs : u32[19]
+	pre_ram_len : u32
+	pre_ram : [ram][pre_ram_len]
+
+	post_regs : u32[19]
+	post_ram_len : u32
+	post_ram : [ram][post_ram_len]
+
+	mem_op_len : u32
+	mem_ops : [mem_op][mem_op_len]
+
+	cycles : u32
+	exception_vector : u16 (vector index, 0 if none)
+	exec_result : u8 (0=ok, 1=illegal, 2=linea, 3=linef, 4=addr, 5=trap, 6=tas, 7=other)
+
+	flags : u32
+		bit0 : mem_ops_overflow
+		bit1 : ram_diff_overflow
+		bit2 : touched_list_overflow
+		bit3..bitN : zeroed
+
+[ram - ordered]
+	addr : u32
+	byte : u8
+	padding: u8[3] = 0x00 0x00 0x00
+
+[mem_op - ordered]
+	addr : u32
+	data : u32
+	kind : u8 (0=read, 1=write)
+	size : u8 (0=byte, 1=word)
+	fc : u8
+	padding : u8 = 0x00
