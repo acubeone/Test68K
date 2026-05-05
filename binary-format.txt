@@ -26,7 +26,7 @@ header + 0x0c -> RESERVED : u8[4]
 
 [entry]
 entry + 0x00 -> MAGIC_WORD : u8[4]
-	content: 0x54 0x43 0x53 0x31
+	content: 0x54 0x43 0x53 0x31 ; ASCII: TCS1
 entry + 0x04 -> ENTRY_LEN : u32
 	content: blob bytes length (includes padding)
 entry + 0x08 -> BLOB : variable
@@ -36,7 +36,7 @@ entry + 0x08 -> BLOB : variable
 	seed : u64
 	model : u32 (0=68000, 1=68010)
 	name_len : u32
-	name : u8[name_len]
+	name : u8[name_len] ; ASCII non-null terminated string
 	padding : u8[] ; align to 4-bytes boundary
 
 	op_word_count : u32
@@ -56,7 +56,7 @@ entry + 0x08 -> BLOB : variable
 
 	cycles : u32
 	exception_vector : u16 (vector index, 0 if none)
-	exec_result : u8 (0=ok, 1=illegal, 2=linea, 3=linef, 4=addr, 5=trap, 6=tas, 7=other)
+	exec_result : u16 (0=ok, 1=illegal, 2=linea, 3=linef, 4=addr, 5=trap, 6=tas, 7=other)
 
 	flags : u32
 		bit0 : mem_ops_overflow
