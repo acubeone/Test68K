@@ -37,11 +37,23 @@ def _parse_args() -> argparse.Namespace:
 	_ = parser.add_argument(
 		"--max-tests",
 		type=int,
-		default=2,
+		default=256,
 		help="How many generated tests for each instruction",
 	)
 	_ = parser.add_argument(
-		"--seed", type=int, default=None, help="Default random seed"
+		"-s",
+		"--seed",
+		type=int,
+		default=0,
+		help="Default random seed",
+	)
+	_ = parser.add_argument(
+		"-m",
+		"--model",
+		type=str,
+		default="m68000",
+		choices=["m68000", "m68010"],
+		help="Select which CPU to emulate: m68000 | m68010",
 	)
 
 	return parser.parse_args()

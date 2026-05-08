@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 4.2)
 project(
 	test68k
 	VERSION 0.1.0
@@ -10,69 +10,84 @@ include("cmake/warnings.cmake")
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
-set(GEN_SCRIPT "${CMAKE_SOURCE_DIR}/src/main.py")
-set(OUT_DIR "${CMAKE_BINARY_DIR}/generated")
-set(WRAPPER_LIB $<TARGET_FILE:musashi_wrapper>)
-set(MUSASHI_DIR "${CMAKE_SOURCE_DIR}/vendor/Musashi")
-set(MUSASHI_GEN_C "${MUSASHI_DIR}/m68kops.c")
-set(MUSASHI_GEN_H "${MUSASHI_DIR}/m68kops.h")
-set(MUSASHI_CODEGEN_EXE "${PROJECT_NAME}_codegen")
-set(M68KMAKE m68kmake)
+set(CACHE{TCS_GEN_SCRIPT} TYPE FILEPATH
+	HELP "Generator python script" VALUE "${CMAKE_SOURCE_DIR}/src/main.py")
+set(CACHE{TCS_OUTPUT_DIR} TYPE PATH
+	HELP "Directory for output files" VALUE "${CMAKE_BINARY_DIR}/generated/")
+set(CACHE{TCS_MAX_TESTS} TYPE STRING
+	HELP "How many generated tests for each instruction" VALUE "256")
+set(CACHE{TCS_DEFAULT_SEED} TYPE STRING
+	HELP "Default random seed" VALUE "0")
+set(CACHE{TCS_CPU_MODEL} TYPE STRING
+	HELP "" VALUE "m68000")
+set_property(CACHE TCS_CPU_MODEL PROPERTY STRINGS "m68000;m68010")
 
-add_executable(${M68KMAKE} "${MUSASHI_DIR}/m68kmake.c")
+if(NOT $CACHE{TCS_MAX_TESTS} MATCHES "^[1-9][0-9]*$")
+	message(FATAL_ERROR "TCS_MAX_TESTS must be a positive integer! Got: '${TCS_MAX_TESTS}'")
+endif()
+
+if(NOT $CACHE{TCS_DEFAULT_SEED} MATCHES "^[0-9]*$")
+	message(FATAL_ERROR "TCS_DEFAULT_SEED must be an integer! Got: '${TCS_DEFAULT_SEED}'")
+endif()
+
+set(_tcs_musashi musashi_wrapper)
+set(_tcs_wrapper_lib $<TARGET_FILE:${_tcs_musashi}>)
+set(_tcs_musashi_dir "${CMAKE_SOURCE_DIR}/vendor/Musashi")
+set(_tcs_musashi_gen_c "${_tcs_musashi_dir}/m68kops.c")
+set(_tcs_musashi_gen_h "${_tcs_musashi_dir}/m68kops.h")
+set(_tcs_musashi_codegen_exe "${PROJECT_NAME}_codegen")
+set(_tcs_m68kmake m68kmake)
+
+add_executable(${_tcs_m68kmake} "${_tcs_musashi_dir}/m68kmake.c")
 
 add_custom_command(
-	OUTPUT "${MUSASHI_GEN_C}" "${MUSASHI_GEN_H}"
-	COMMAND $<TARGET_FILE:m68kmake>
-	WORKING_DIRECTORY "${MUSASHI_DIR}"
-	DEPENDS m68kmake "${MUSASHI_DIR}/m68k_in.c"
+	OUTPUT "${_tcs_musashi_gen_c}" "${_tcs_musashi_gen_h}"
+	COMMAND $<TARGET_FILE:${_tcs_m68kmake}>
+	WORKING_DIRECTORY "${_tcs_musashi_dir}"
+	DEPENDS m68kmake "${_tcs_musashi_dir}/m68k_in.c"
 	COMMENT "Generating Musashi opcode tables..."
 	VERBATIM
 )
 add_custom_target(
-	${MUSASHI_CODEGEN_EXE}
+	${_tcs_musashi_codegen_exe}
 	DEPENDS
-		"${MUSASHI_GEN_C}"
-		"${MUSASHI_GEN_H}"
+		"${_tcs_musashi_gen_c}"
+		"${_tcs_musashi_gen_h}"
 )
 
-add_library(musashi_wrapper SHARED
+add_library(${_tcs_musashi} SHARED
 	"src/wrapper/wrapper.c"
 
-	"${MUSASHI_DIR}/m68kcpu.c"
-	"${MUSASHI_DIR}/m68kdasm.c"
-	"${MUSASHI_DIR}/softfloat/softfloat.c"
-	"${MUSASHI_GEN_C}"
+	"${_tcs_musashi_dir}/m68kcpu.c"
+	"${_tcs_musashi_dir}/m68kdasm.c"
+	"${_tcs_musashi_dir}/softfloat/softfloat.c"
+	"${_tcs_musashi_gen_c}"
 )
-add_dependencies(musashi_wrapper ${MUSASHI_CODEGEN_EXE})
-set_default_warnings(musashi_wrapper)
-enable_tools(musashi_wrapper)
+add_dependencies(${_tcs_musashi} ${_tcs_musashi_codegen_exe})
+set_default_warnings(${_tcs_musashi})
+enable_tools(${_tcs_musashi})
 
-target_compile_features(musashi_wrapper PRIVATE c_std_23)
-
+target_compile_features(${_tcs_musashi} PRIVATE c_std_23)
+target_link_libraries(${_tcs_musashi} PUBLIC m)
 
 if(USING_MSVC)
-	target_compile_options(musashi_wrapper PRIVATE
+	target_compile_options(${_tcs_musashi} PRIVATE
 		/FI"${CMAKE_SOURCE_DIR}/src/wrapper/m68kconf.h")
 else()
-	target_compile_options(musashi_wrapper PRIVATE
+	target_compile_options(${_tcs_musashi} PRIVATE
 		-include "${CMAKE_SOURCE_DIR}/src/wrapper/m68kconf.h")
 endif()
 
-
-
 target_include_directories(
-	musashi_wrapper
+	${_tcs_musashi}
 	PUBLIC
 		"${CMAKE_SOURCE_DIR}/src/wrapper"
-		"${MUSASHI_DIR}"
-		"${MUSASHI_DIR}/softfloat"
+		"${_tcs_musashi_dir}"
+		"${_tcs_musashi_dir}/softfloat"
 )
 
-target_link_libraries(musashi_wrapper PUBLIC m)
-
 set_target_properties(
-	musashi_wrapper
+	${_tcs_musashi}
 	PROPERTIES
 		OUTPUT_NAME "musashi_wrapper"
 		POSITION_INDEPENDENT_CODE ON
@@ -80,11 +95,15 @@ set_target_properties(
 
 add_custom_target(run_generator
 	DEPENDS musashi_wrapper
-	COMMAND ${CMAKE_COMMAND} -E make_directory "${OUT_DIR}"
+	COMMAND ${CMAKE_COMMAND} -E make_directory "$CACHE{TCS_OUTPUT_DIR}"
 	COMMAND ${CMAKE_COMMAND} -E env
-		"T68K_WRAPPER_LIB=${WRAPPER_LIB}"
+		"T68K_WRAPPER_LIB=${_tcs_wrapper_lib}"
 		"LD_LIBRARY_PATH=$<TARGET_FILE_DIR:musashi_wrapper>:$ENV{LD_LIBRARY_PATH}"
-		${Python3_EXECUTABLE} "${GEN_SCRIPT}" --out "${OUT_DIR}"
+		${Python3_EXECUTABLE} "$CACHE{TCS_GEN_SCRIPT}"
+		--out "$CACHE{TCS_OUTPUT_DIR}"
+		--max-tests "$CACHE{TCS_MAX_TESTS}"
+		--seed "$CACHE{TCS_DEFAULT_SEED}"
+		--model "$CACHE{TCS_CPU_MODEL}"
 	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 	COMMENT "Running test generator"
 	VERBATIM
