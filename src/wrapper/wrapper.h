@@ -93,6 +93,7 @@ void cpu_capture_pre();
 void cpu_capture_post();
 
 void cpu_disasm_at(u32 pc, char *out, u32 out_len);
+bool cpu_is_instruction_valid(u16 opcode, CPU_Model model);
 
 void cpu_set_op_words(const u16 *words, u8 count);
 void cpu_set_test_case_name(const char *name);

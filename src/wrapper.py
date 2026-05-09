@@ -104,6 +104,10 @@ _lib.cpu_capture_post.restype = None
 _lib.cpu_disasm_at.argtypes = [C.c_uint32, C.c_char_p, C.c_uint32]
 _lib.cpu_disasm_at.restype = None
 
+# void cpu_is_instruction_valid(u16)
+_lib.cpu_is_instruction_valid.argtypes = [C.c_uint16, C.c_uint32]
+_lib.cpu_is_instruction_valid.restype = C.c_bool
+
 # void cpu_set_op_words(const u16*, u8)
 _lib.cpu_set_op_words.argtypes = [C.POINTER(C.c_uint16), C.c_uint8]
 _lib.cpu_set_op_words.restype = None
@@ -256,6 +260,10 @@ class CPU:
 		buf = C.create_string_buffer(MAX_NAME_LEN)
 		_lib.cpu_disasm_at(C.c_uint32(pc), buf, C.c_uint32(len(buf)))
 		return buf.value.decode("utf-8", errors="replace")
+
+	def is_instruction_valid(self, opcode: int, model: int) -> bool:
+		res = _lib.cpu_is_instruction_valid(C.c_uint16(opcode), C.c_uint32(model))
+		return bool(res)
 
 	def set_op_words(self, words: list[int]) -> None:
 		count = min(len(words), MAX_OP_WORDS)

@@ -239,6 +239,11 @@ void cpu_disasm_at(u32 pc, char *out, u32 out_len) {
 	snprintf(out, out_len, "%s", tmp);
 }
 
+bool cpu_is_instruction_valid(u16 opcode, CPU_Model model) {
+	model = (model == CPU_MODEL_M68000) ? M68K_CPU_TYPE_68000 : M68K_CPU_TYPE_68010;
+	return m68k_is_valid_instruction(opcode, model);
+}
+
 void cpu_set_op_words(const u16 *words, u8 count) {
 	assert(words);
 

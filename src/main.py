@@ -1,7 +1,7 @@
 import argparse
 from pathlib import Path
-import pprint
 import random
+import re
 import sys
 from typing import Any
 import wrapper
@@ -16,13 +16,47 @@ VECTORS: list[int] = [
 	*[0x00_0800 + (vec * 0x10) for vec in range(2, 256)],
 ]
 
+_RE_NAME = re.compile(
+	r"""
+	^\s*\d+\s+
+	(?P<mnem>[A-Za-z][A-Za-z0-9_.]*)
+	(?:\s+.*)?$
+	""",
+	re.VERBOSE,
+)
 
-INSTRS = [
-	[0x4E71],  # NOP
-	[0x4AFC],  # ILLEGAL
-	[0xA000],  # LINE-A
-	[0xF000],  # LINE-F
-]
+# fmt: off
+_VALID_MNEMONICS = {
+	"abcd", "add", "adda", "addi", "addq", "addx",
+	"and", "andi",
+	"asl", "asr",
+	"bcc", "bcs", "beq", "bge", "bgt", "bhi", "ble", "bls",
+	"blt", "bmi", "bne", "bpl", "bra", "bsr", "bvc", "bvs",
+	"bchg", "bclr", "bset", "btst",
+	"bkpt", "chk", "clr",
+	"cmp", "cmpa", "cmpi", "cmpm",
+	"dbcc", "dbcs", "dbeq", "dbf",  "dbge", "dbgt", "dbhi", "dble", "dbls",
+	"dblt", "dbmi", "dbne", "dbpl", "dbra", "dbt",  "dbvc", "dbvs",
+	"divs", "divu",
+	"eor", "eori",
+	"exg", "ext", "illegal", "jmp", "jsr",
+	"lea", "link",
+	"lsl", "lsr",
+	"move", "movea", "movem", "movep", "moveq", "moves", "movec",
+	"muls", "mulu",
+	"nbcd", "neg", "negx",
+	"nop",
+	"not", "or", "ori",
+	"pea", "reset",
+	"rol", "ror", "roxl", "roxr",
+	"rte", "rtr", "rts", "rtd",
+	"sbcd",
+	"scc", "scs", "seq", "sf",  "sge", "sgt", "shi", "sle",
+	"sls", "slt", "smi", "sne", "spl", "st",  "svc", "svs",
+	"sub", "suba", "subi", "subq", "subx",
+	"swap", "tas", "trap", "trapv", "tst", "unlk",
+}
+# fmt:on
 
 
 def _parse_args() -> argparse.Namespace:
@@ -110,21 +144,60 @@ def _rand_ram(rng: random.Random, n: int = 256) -> list[int]:
 	return [rng.getrandbits(8) for _ in range(n)]
 
 
-def _generate_batch(outdir: Path, max_tests: int, seed: int) -> None:
+def _mnemonic_base(name: str) -> str:
+	m = _RE_NAME.match(name)
+	if not m:
+		return ""
+
+	token = m.group("mnem").lower()
+	base = token.split(".", 1)[0]
+
+	if base == "dbra":
+		base = "dbf"
+	return base if base in _VALID_MNEMONICS else ""
+
+
+def _generate_batch(max_tests: int, seed: int, model: int) -> dict[str, list[Any]]:
 	cpu = wrapper.CPU()
 	seed = seed or random.randint(0, sys.maxsize)
 
-	for op_words in INSTRS:
+	batch: dict[str, list[Any]] = {}
+
+	for opcode in range(0, 0x1_0000):
+		op_words = [opcode]
+		if not cpu.is_instruction_valid(opcode, model):
+			continue
+
 		for i in range(max_tests):
-			rng = random.Random(seed)
+			case_seed = seed ^ (opcode << 16) ^ i
+			rng = random.Random(case_seed)
 
 			regs = _rand_regs(rng)
 			ram = _rand_ram(rng)
 
-			case = _run_test_case(
-				cpu, i, regs, op_words, ram, wrapper.MODEL_M68000, seed
-			)
-			pprint.pp(case)
+			test = _run_test_case(cpu, i, regs, op_words, ram, model, case_seed)
+
+			mnemonic = ""
+			exec_result = test.get("exec_result", wrapper.EXEC_OK)
+			if exec_result in [
+				wrapper.EXEC_ILLEGAL,
+				wrapper.EXEC_LINEA,
+				wrapper.EXEC_LINEF,
+			]:
+				mnemonic = "illegal"
+			else:
+				test_name = str(test.get("name", ""))
+				if not test_name:
+					continue
+				mnemonic = _mnemonic_base(test_name)
+
+			if not mnemonic:
+				continue
+			batch.setdefault(mnemonic, []).append(test)
+
+	return batch
+
+
 
 
 def main() -> None:
@@ -132,7 +205,8 @@ def main() -> None:
 	if not args.out.is_dir():
 		args.out.mkdir(parents=True, exist_ok=True)
 
-	_generate_batch(args.out, args.max_tests, args.seed)
+	model = wrapper.MODEL_M68010 if args.model == "m68010" else wrapper.MODEL_M68000
+	batch = _generate_batch(args.max_tests, args.seed, model)
 
 
 if __name__ == "__main__":
