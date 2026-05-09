@@ -1,5 +1,7 @@
 #include "wrapper.h"
 
+#define MUSASHI_CNF "conf.h"
+
 #include "m68k.h"
 
 #include <assert.h>
@@ -7,6 +9,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define FATAL_EXIT(...) _fatal_exit(__func__, __LINE__, __VA_ARGS__)
 
 static u8 *_ram = nullptr;
 
@@ -23,8 +27,6 @@ static const u16 _monitored_vecs[] = { 4, 10, 11 }; // ILLEGAL, LINEA, LINEF
 static u64 _instr_count = 0;
 static bool _trace_enabled = false;
 static bool _was_init = false;
-
-#define FATAL_EXIT(...) _fatal_exit(__func__, __LINE__, __VA_ARGS__)
 
 [[noreturn]]
 static void _fatal_exit(const char *func, u32 line, const char *fmt, ...) {
@@ -308,6 +310,14 @@ void cpu_set_reg(u8 reg, u32 data) {
 	m68k_set_reg(reg, data);
 }
 
+void cpu_set_regs(u32 regs[CPU_REG_COUNT]) {
+	assert(regs);
+
+	for (u32 i = 0; i < CPU_REG_COUNT; i += 1) {
+		m68k_set_reg(i, regs[i]);
+	}
+}
+
 u8 cpu_read_byte(u32 addr) {
 	assert(_ram);
 	addr &= 0x003f'ffff;
@@ -375,6 +385,14 @@ void cpu_write_word(u32 addr, u16 word) {
 	_ram[addr + 0] = (u8)((word >> 8) & 0x00ff);
 	_ram[addr + 1] = (u8)(word & 0x00ff);
 	_register_ram_access(addr, word, true, true);
+}
+
+void cpu_write_block(u32 addr, u8 *bytes, u32 len) {
+	assert(bytes);
+	if (len == 0)
+		return;
+
+	memcpy(&_ram[addr], bytes, len);
 }
 
 void cpu_set_fc(u8 fc) {

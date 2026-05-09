@@ -104,11 +104,14 @@ u32 cpu_execute(u32 total_budget, u32 step_budget); // Return used cycles
 
 u32 cpu_get_reg(u8 reg);
 void cpu_set_reg(u8 reg, u32 data);
+void cpu_set_regs(u32 regs[CPU_REG_COUNT]);
 
 u8 cpu_read_byte(u32 addr);
 u16 cpu_read_word(u32 addr);
 void cpu_write_byte(u32 addr, u8 byte);
 void cpu_write_word(u32 addr, u16 word);
+
+void cpu_write_block(u32 addr, u8 *bytes, u32 len);
 
 // Musashi callbacks
 void cpu_set_fc(u8 fc);

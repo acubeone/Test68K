@@ -15,7 +15,7 @@ set(CACHE{TCS_GEN_SCRIPT} TYPE FILEPATH
 set(CACHE{TCS_OUTPUT_DIR} TYPE PATH
 	HELP "Directory for output files" VALUE "${CMAKE_BINARY_DIR}/generated/")
 set(CACHE{TCS_MAX_TESTS} TYPE STRING
-	HELP "How many generated tests for each instruction" VALUE "256")
+	HELP "How many generated tests for each instruction" VALUE "16")
 set(CACHE{TCS_DEFAULT_SEED} TYPE STRING
 	HELP "Default random seed" VALUE "0")
 set(CACHE{TCS_CPU_MODEL} TYPE STRING
@@ -69,14 +69,6 @@ enable_tools(${_tcs_musashi})
 
 target_compile_features(${_tcs_musashi} PRIVATE c_std_23)
 target_link_libraries(${_tcs_musashi} PUBLIC m)
-
-if(USING_MSVC)
-	target_compile_options(${_tcs_musashi} PRIVATE
-		/FI"${CMAKE_SOURCE_DIR}/src/wrapper/m68kconf.h")
-else()
-	target_compile_options(${_tcs_musashi} PRIVATE
-		-include "${CMAKE_SOURCE_DIR}/src/wrapper/m68kconf.h")
-endif()
 
 target_include_directories(
 	${_tcs_musashi}

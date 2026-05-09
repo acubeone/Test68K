@@ -3,6 +3,7 @@ from pathlib import Path
 import random
 import re
 import sys
+import time
 from typing import Any
 import tcs
 import wrapper
@@ -72,7 +73,7 @@ def _parse_args() -> argparse.Namespace:
 	_ = parser.add_argument(
 		"--max-tests",
 		type=int,
-		default=256,
+		default=16,
 		help="How many generated tests for each instruction",
 	)
 	_ = parser.add_argument(
@@ -112,15 +113,11 @@ def _run_test_case(
 		cpu.write_word(base + 0, (long >> 16) & 0xFFFF)
 		cpu.write_word(base + 2, (long) & 0xFFFF)
 
-	for i, word in enumerate(op_words):
-		cpu.write_word(ROM_ADDR[0] + (i * 2), word)
-
-	for i, byte in enumerate(ram):
-		cpu.write_byte(RAM_ADDR[0] + i, byte & 0xFF)
+	cpu.write_block(ROM_ADDR[0], op_words)
+	cpu.write_block(RAM_ADDR[0], ram)
 
 	cpu.reset()
-	for i, reg in enumerate(regs):
-		cpu.set_reg(wrapper.REG_NAMES[i], reg)
+	cpu.set_regs(regs)
 
 	disasm = cpu.disasm_at(ROM_ADDR[0])
 	cpu.set_test_case_name(f"{id} {disasm} {op_words[0]:x}")
@@ -158,20 +155,47 @@ def _mnemonic_base(name: str) -> str:
 	return base if base in _VALID_MNEMONICS else ""
 
 
+# Just a QoL progress bar
+def _progress(done: int, total: int, width: int = 40, label: str = "") -> None:
+	if total <= 0:
+		return
+
+	ratio = done / total
+	filled = int(ratio * width)
+	bar: str = "#" * filled + "-" * (width - filled)
+	percentage = ratio * 100.0
+	sys.stderr.write(f"\r{label} [{bar}] {done}/{total} {percentage:6.2f}%")
+	sys.stderr.flush()
+	if done >= total:
+		sys.stderr.write("\n")
+
+
 def _generate_batch(max_tests: int, seed: int, model: int) -> dict[str, list[Any]]:
 	cpu = wrapper.CPU()
 	seed = seed or random.randint(0, sys.maxsize)
 
-	batch: dict[str, list[Any]] = {}
+	total = 0x1_0000 * max_tests
+	done = 0
+	last = 0.0
 
+	batch: dict[str, list[Any]] = {}
 	for opcode in range(0, 0x1_0000):
 		op_words = [opcode]
-		if not cpu.is_instruction_valid(opcode, model):
+		if not cpu.is_instruction_valid(opcode, model) and opcode != 0x4AFC:
 			continue
 
+		case_seed = seed ^ (opcode << 16)
+		rng = random.Random(case_seed)
 		for i in range(max_tests):
-			case_seed = seed ^ (opcode << 16) ^ i
-			rng = random.Random(case_seed)
+			# Update progress bar
+			done += 1
+			now = time.monotonic()
+			if now - last >= 0.1 or done == total:
+				_progress(done, total, label="Generating")
+				last = now
+
+			operands = [rng.getrandbits(32) for _ in range(wrapper.MAX_OP_WORDS)]
+			op_words.extend(operands)
 
 			regs = _rand_regs(rng)
 			ram = _rand_ram(rng)
@@ -180,6 +204,9 @@ def _generate_batch(max_tests: int, seed: int, model: int) -> dict[str, list[Any
 
 			mnemonic = ""
 			exec_result = test.get("exec_result", wrapper.EXEC_OK)
+			if exec_result in [wrapper.EXEC_LINEA, wrapper.EXEC_LINEF]:
+				break  # Ignore LINEA and LINEF
+
 			if exec_result in [
 				wrapper.EXEC_ILLEGAL,
 				wrapper.EXEC_LINEA,

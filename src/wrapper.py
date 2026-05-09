@@ -136,6 +136,10 @@ _lib.cpu_get_reg.restype = C.c_uint32
 _lib.cpu_set_reg.argtypes = [C.c_uint8, C.c_uint32]
 _lib.cpu_set_reg.restype = None
 
+# void cpu_set_regs(u32*)
+_lib.cpu_set_regs.argtypes = [C.POINTER(C.c_uint32)]
+_lib.cpu_set_regs.restype = None
+
 # u8 cpu_read_byte(u32)
 _lib.cpu_read_byte.argtypes = [C.c_uint32]
 _lib.cpu_read_byte.restype = C.c_uint8
@@ -151,6 +155,10 @@ _lib.cpu_write_byte.restype = None
 # void cpu_write_word(u32, u16)
 _lib.cpu_write_word.argtypes = [C.c_uint32, C.c_uint16]
 _lib.cpu_write_word.restype = None
+
+# void cpu_write_block(u32, u8*, u32)
+_lib.cpu_write_block.argtypes = [C.c_uint32, C.POINTER(C.c_uint8), C.c_uint32]
+_lib.cpu_write_block.restype = None
 
 REG_NAMES = [
 	"d0",
@@ -282,6 +290,10 @@ class CPU:
 	def set_reg(self, reg: str, data: int) -> None:
 		_lib.cpu_set_reg(REG_NAMES.index(reg), C.c_uint32(data))
 
+	def set_regs(self, regs: list[int]) -> None:
+		arr = (C.c_uint32 * len(regs))(*regs)
+		_lib.cpu_set_regs(arr)
+
 	def read_byte(self, addr: int) -> int:
 		return int(_lib.cpu_read_byte(addr))
 
@@ -293,3 +305,7 @@ class CPU:
 
 	def write_word(self, addr: int, word: int) -> None:
 		_lib.cpu_write_word(addr, C.c_uint16(word))
+
+	def write_block(self, addr: int, data: list[int]) -> None:
+		arr = (C.c_uint8 * len(data))(*data)
+		_lib.cpu_write_block(C.c_uint32(addr), arr, C.c_uint32(len(data)))
