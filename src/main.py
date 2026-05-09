@@ -4,6 +4,7 @@ import random
 import re
 import sys
 from typing import Any
+import tcs
 import wrapper
 
 CYCLES_BUDGET: int = 200
@@ -198,6 +199,12 @@ def _generate_batch(max_tests: int, seed: int, model: int) -> dict[str, list[Any
 	return batch
 
 
+def _spit_file(out_dir: Path, name: str, tests: list[dict[str, Any]]) -> None:
+	filename = out_dir / Path(name).with_suffix(".tcs")
+	print(f"Writting to {filename}!")
+
+	data = tcs.serialize(tests)
+	filename.write_bytes(data)
 
 
 def main() -> None:
@@ -207,6 +214,9 @@ def main() -> None:
 
 	model = wrapper.MODEL_M68010 if args.model == "m68010" else wrapper.MODEL_M68000
 	batch = _generate_batch(args.max_tests, args.seed, model)
+
+	for name, test in batch.items():
+		_spit_file(args.out, name, test)
 
 
 if __name__ == "__main__":
