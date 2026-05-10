@@ -155,63 +155,57 @@ def _mnemonic_base(name: str) -> str:
 	return base if base in _VALID_MNEMONICS else ""
 
 
-# Just a QoL progress bar
-def _progress(done: int, total: int, width: int = 40, label: str = "") -> None:
-	if total <= 0:
-		return
+def _get_valid_opcodes(cpu: wrapper.CPU, model: int) -> list[int]:
+	opcodes: list[int] = []
 
-	ratio = done / total
-	filled = int(ratio * width)
-	bar: str = "#" * filled + "-" * (width - filled)
-	percentage = ratio * 100.0
-	sys.stderr.write(f"\r{label} [{bar}] {done}/{total} {percentage:6.2f}%")
-	sys.stderr.flush()
-	if done >= total:
-		sys.stderr.write("\n")
+	for opcode in range(0, 0x1_0000):
+		opclass = opcode & 0xF000
+		if opclass == 0xF000 or opclass == 0xA000:
+			continue
+
+		if opcode != 0x4AFC and not cpu.is_instruction_valid(opcode, model):
+			continue
+
+		opcodes.append(opcode)
+
+	return opcodes
 
 
-def _generate_batch(max_tests: int, seed: int, model: int) -> dict[str, list[Any]]:
-	cpu = wrapper.CPU()
+def _generate_batch(
+	cpu: wrapper.CPU, opcodes: list[int], max_tests: int, seed: int, model: int
+) -> dict[str, list[Any]]:
 	seed = seed or random.randint(0, sys.maxsize)
+	rng = random.Random(seed)
 
-	total = 0x1_0000 * max_tests
+	total = len(opcodes) * max_tests
 	done = 0
 	last = 0.0
 
 	batch: dict[str, list[Any]] = {}
-	for opcode in range(0, 0x1_0000):
+	for opcode in opcodes:
+		# Update progress bar
+		done += 1
+		now = time.monotonic()
+		if now - last >= 0.1 or done == total:
+			sys.stderr.write(f"\rGenerating... {hex(opcode)} [{done}/{total}]")
+			if done >= total:
+				sys.stderr.write("\n")
+			sys.stderr.flush()
+			last = now
+
 		op_words = [opcode]
-		if not cpu.is_instruction_valid(opcode, model) and opcode != 0x4AFC:
-			continue
-
-		case_seed = seed ^ (opcode << 16)
-		rng = random.Random(case_seed)
 		for i in range(max_tests):
-			# Update progress bar
-			done += 1
-			now = time.monotonic()
-			if now - last >= 0.1 or done == total:
-				_progress(done, total, label="Generating")
-				last = now
-
 			operands = [rng.getrandbits(32) for _ in range(wrapper.MAX_OP_WORDS)]
 			op_words.extend(operands)
 
 			regs = _rand_regs(rng)
 			ram = _rand_ram(rng)
 
-			test = _run_test_case(cpu, i, regs, op_words, ram, model, case_seed)
+			test = _run_test_case(cpu, i, regs, op_words, ram, model, seed)
 
 			mnemonic = ""
 			exec_result = test.get("exec_result", wrapper.EXEC_OK)
-			if exec_result in [wrapper.EXEC_LINEA, wrapper.EXEC_LINEF]:
-				break  # Ignore LINEA and LINEF
-
-			if exec_result in [
-				wrapper.EXEC_ILLEGAL,
-				wrapper.EXEC_LINEA,
-				wrapper.EXEC_LINEF,
-			]:
+			if exec_result == wrapper.EXEC_ILLEGAL:
 				mnemonic = "illegal"
 			else:
 				test_name = str(test.get("name", ""))
@@ -227,7 +221,7 @@ def _generate_batch(max_tests: int, seed: int, model: int) -> dict[str, list[Any
 
 
 def _spit_file(out_dir: Path, name: str, tests: list[dict[str, Any]]) -> None:
-	filename = out_dir / Path(name).with_suffix(".tcs")
+	filename = out_dir / Path(name).with_suffix(".bin")
 	print(f"Writting to {filename}!")
 
 	data = tcs.serialize(tests)
@@ -239,8 +233,11 @@ def main() -> None:
 	if not args.out.is_dir():
 		args.out.mkdir(parents=True, exist_ok=True)
 
+	cpu = wrapper.CPU()
 	model = wrapper.MODEL_M68010 if args.model == "m68010" else wrapper.MODEL_M68000
-	batch = _generate_batch(args.max_tests, args.seed, model)
+
+	opcodes = _get_valid_opcodes(cpu, model)
+	batch = _generate_batch(cpu, opcodes, args.max_tests, args.seed, model)
 
 	for name, test in batch.items():
 		_spit_file(args.out, name, test)

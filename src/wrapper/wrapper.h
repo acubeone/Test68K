@@ -28,8 +28,6 @@ typedef enum CPU_Model {
 typedef enum CPU_ExecResult {
 	CPU_EXEC_OK = 0,
 	CPU_EXEC_ILLEGAL, // Exception: Illegal
-	CPU_EXEC_LINEA,	  // Exception: Line A
-	CPU_EXEC_LINEF,	  // Exception: Line F
 	CPU_EXEC_ADDR,	  // Exception: Address Error
 	CPU_EXEC_TRAP,	  // Exception: TRAP #N
 	CPU_EXEC_TAS,	  // Instruction: TAS

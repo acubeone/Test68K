@@ -1,7 +1,5 @@
 #include "wrapper.h"
 
-#define MUSASHI_CNF "conf.h"
-
 #include "m68k.h"
 
 #include <assert.h>
@@ -143,16 +141,19 @@ static bool _is_pc_marker(u32 pc) {
 			_test_case.exception_vector = vec;
 			if (vec == 4)
 				_test_case.exec_result = CPU_EXEC_ILLEGAL;
-			if (vec == 10)
-				_test_case.exec_result = CPU_EXEC_LINEA;
-			if (vec == 11)
-				_test_case.exec_result = CPU_EXEC_LINEF;
-
 			return true;
 		}
 	}
 
 	return false;
+}
+
+static u16 rand_u16() {
+	return (u16)(rand() & 0xff << 8) | (u16)(rand() & 0xff);
+}
+
+static u32 rand_u32() {
+	return (u32)(rand_u16() << 16) | (u32)rand_u16();
 }
 
 bool cpu_init() {

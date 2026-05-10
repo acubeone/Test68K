@@ -78,6 +78,12 @@ target_include_directories(
 		"${_tcs_musashi_dir}/softfloat"
 )
 
+target_compile_definitions(
+	${_tcs_musashi}
+	PUBLIC
+		-DMUSASHI_CNF="conf.h"
+)
+
 set_target_properties(
 	${_tcs_musashi}
 	PROPERTIES
