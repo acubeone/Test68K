@@ -148,14 +148,6 @@ static bool _is_pc_marker(u32 pc) {
 	return false;
 }
 
-static u16 rand_u16() {
-	return (u16)(rand() & 0xff << 8) | (u16)(rand() & 0xff);
-}
-
-static u32 rand_u32() {
-	return (u32)(rand_u16() << 16) | (u32)rand_u16();
-}
-
 bool cpu_init() {
 	if (_was_init)
 		return true;
@@ -191,6 +183,46 @@ void cpu_deinit() {
 		free(_touched_set);
 
 	_was_init = false;
+}
+
+void cpu_request_batch(const CPU_BatchRequest *req, CPU_TestCase *batch[]) {
+	assert(req);
+	assert(batch);
+
+	for (u32 i = 0; i < req->count; i += 1) {
+		cpu_clear_ram();
+		cpu_begin_test_case(req->model, req->seed);
+		cpu_set_op_words(req->op_words, CPU_MAX_OP_WORDS);
+
+		for (u32 j = 0; j < CPU_VEC_COUNT; j += 1) {
+			u32 base = j * 4;
+			u32 long_ = req->vectors[j];
+			cpu_write_word(base + 0, (long_ >> 16) & 0xffff);
+			cpu_write_word(base + 2, (long_ >> 0) & 0xffff);
+		}
+
+		for (u32 j = 0; j < CPU_MAX_OP_WORDS; j += 1)
+			cpu_write_word(CPU_ROM_ADDR + (j * 2), req->op_words[j]);
+
+		cpu_write_block(CPU_RAM_ADDR, req->ram, req->ram_size);
+
+		cpu_reset();
+		cpu_set_regs(req->regs);
+
+		char buf[CPU_MAX_NAME_LEN] = {};
+		cpu_disasm_at(CPU_ROM_ADDR, buf, CPU_MAX_NAME_LEN);
+
+		char name[CPU_MAX_NAME_LEN] = {};
+		snprintf(name, CPU_MAX_NAME_LEN, "%d %s %x", i, buf, req->op_words[0]);
+		cpu_set_test_case_name(name);
+
+		cpu_capture_pre();
+		cpu_execute(req->cycles_budget, req->step_budget);
+		cpu_capture_post();
+
+		assert(batch[i]);
+		cpu_query_test_case(batch[i]);
+	}
 }
 
 void cpu_begin_test_case(CPU_Model model, u64 seed) {
@@ -311,7 +343,7 @@ void cpu_set_reg(u8 reg, u32 data) {
 	m68k_set_reg(reg, data);
 }
 
-void cpu_set_regs(u32 regs[CPU_REG_COUNT]) {
+void cpu_set_regs(const u32 regs[CPU_REG_COUNT]) {
 	assert(regs);
 
 	for (u32 i = 0; i < CPU_REG_COUNT; i += 1) {
@@ -393,6 +425,10 @@ void cpu_write_block(u32 addr, u8 *bytes, u32 len) {
 	if (len == 0)
 		return;
 
+	addr &= 0x003f'ffff;
+	u32 max_len = CPU_MAX_RAM - addr;
+	if (len > max_len)
+		len = max_len;
 	memcpy(&_ram[addr], bytes, len);
 }
 

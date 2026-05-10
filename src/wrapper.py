@@ -10,7 +10,8 @@ MAX_RAM_DIFF = 4096
 MAX_MEM_OPS = 4096
 MAX_OP_WORDS = 16
 
-REG_COUNT = 19
+REG_COUNT = 25
+VEC_COUNT = 256
 
 # CPU_Model
 MODEL_M68000 = 0
@@ -73,6 +74,72 @@ class TestCase(C.Structure):
 		("touched_list_overflow", C.c_bool),
 	]
 
+	def to_list(self) -> dict[str, Any]:
+		pre_ram = [
+			{
+				"addr": int(self.pre.ram[i].addr),
+				"byte": int(self.pre.ram[i].byte),
+			}
+			for i in range(int(self.pre.ram_len))
+		]
+		post_ram = [
+			{
+				"addr": int(self.post.ram[i].addr),
+				"byte": int(self.post.ram[i].byte),
+			}
+			for i in range(int(self.post.ram_len))
+		]
+
+		mem_ops = [
+			{
+				"kind": int(self.mem_ops[i].kind),
+				"addr": int(self.mem_ops[i].addr),
+				"data": int(self.mem_ops[i].data),
+				"fc": int(self.mem_ops[i].fc),
+				"is_word": bool(self.mem_ops[i].is_word),
+			}
+			for i in range(self.mem_op_len)
+		]
+
+		return {
+			"name": _decode_ctr(self.name),
+			"model": int(self.model),
+			"seed": int(self.seed),
+			"op_words": [int(self.op_words[i]) for i in range(int(self.op_word_count))],
+			"pre": {
+				"regs": [int(self.pre.regs[i]) for i in range(REG_COUNT)],
+				"ram": pre_ram,
+			},
+			"post": {
+				"regs": [int(self.post.regs[i]) for i in range(REG_COUNT)],
+				"ram": post_ram,
+			},
+			"mem_ops": mem_ops,
+			"cycles": int(self.cycles),
+			"exec_result": int(self.exec_result),
+			"exception_vector": int(self.exception_vector),
+			"overflow": {
+				"mem_ops": bool(self.mem_ops_overflow),
+				"ram_diff": bool(self.ram_diff_overflow),
+				"touched_list": bool(self.touched_list_overflow),
+			},
+		}
+
+
+class BatchRequest(C.Structure):
+	_fields_ = [
+		("count", C.c_uint32),
+		("seed", C.c_uint64),
+		("model", C.c_uint32),
+		("regs", C.c_uint32 * REG_COUNT),
+		("cycles_budget", C.c_uint32),
+		("step_budget", C.c_uint32),
+		("vectors", C.c_uint32 * VEC_COUNT),
+		("op_words", C.c_uint16 * MAX_OP_WORDS),
+		("ram", C.POINTER(C.c_uint8)),
+		("ram_size", C.c_uint32),
+	]
+
 
 # bool cpu_init(void)
 _lib.cpu_init.argtypes = []
@@ -81,6 +148,13 @@ _lib.cpu_init.restype = C.c_bool
 # void cpu_deinit(void)
 _lib.cpu_deinit.argtypes = []
 _lib.cpu_deinit.restype = None
+
+# void cpu_request_batch(const CPU_BatchRequest*, CPU_TestCase *[])
+_lib.cpu_request_batch.argtypes = [
+	C.POINTER(BatchRequest),
+	C.POINTER(C.POINTER(TestCase)),
+]
+_lib.cpu_request_batch.restype = None
 
 # void cpu_begin_test_case(CPU_Model, u64)
 _lib.cpu_begin_test_case.argtypes = [C.c_uint32, C.c_uint64]
@@ -201,63 +275,48 @@ class CPU:
 	def __del__(self):
 		_lib.cpu_deinit()
 
+	def request_batch(self, request: dict[str, Any]) -> list[dict[str, Any]]:
+		request_count = request.get("count", 0)
+
+		req = BatchRequest()
+		req.count = C.c_uint32(request_count)
+		req.seed = C.c_uint64(request.get("seed", 0))
+		req.model = C.c_uint32(request.get("model", MODEL_M68000))
+		req.cycles_budget = C.c_uint32(request.get("cycles_budget", 0))
+		req.step_budget = C.c_uint32(request.get("step_budget", 4))
+
+		req.regs = (C.c_uint32 * REG_COUNT)()
+		for i, reg in enumerate(request.get("regs", [])[:REG_COUNT]):
+			req.regs[i] = reg
+
+		req.vectors = (C.c_uint32 * VEC_COUNT)()
+		for i, vec in enumerate(request.get("vectors", [])[:VEC_COUNT]):
+			req.vectors[i] = vec
+
+		req.op_words = (C.c_uint16 * MAX_OP_WORDS)()
+		for i, words in enumerate(request.get("op_words", [])[:MAX_OP_WORDS]):
+			req.op_words[i] = words
+
+		ram = request.get("ram", [])
+		ram_arr = (C.c_uint8 * len(ram))(*ram)
+
+		req.ram_size = C.c_uint32(len(ram))
+		req.ram = C.cast(ram_arr, C.POINTER(C.c_uint8))
+
+		cases = (TestCase * request_count)()
+		case_ptrs = (C.POINTER(TestCase) * request_count)(
+			*[C.pointer(cases[i]) for i in range(request_count)]
+		)
+
+		_lib.cpu_request_batch(C.byref(req), case_ptrs)
+		return [cases[i].to_list() for i in range(request_count)]
+
 	def begin_test_case(self, model: int, seed: int) -> None:
 		_lib.cpu_begin_test_case(C.c_uint32(model), C.c_uint64(seed))
 
 	def query_test_case(self) -> dict[str, Any]:
 		_lib.cpu_query_test_case(C.byref(_test_buf))
-
-		pre_ram = [
-			{
-				"addr": int(_test_buf.pre.ram[i].addr),
-				"byte": int(_test_buf.pre.ram[i].byte),
-			}
-			for i in range(int(_test_buf.pre.ram_len))
-		]
-		post_ram = [
-			{
-				"addr": int(_test_buf.post.ram[i].addr),
-				"byte": int(_test_buf.post.ram[i].byte),
-			}
-			for i in range(int(_test_buf.post.ram_len))
-		]
-
-		mem_ops = [
-			{
-				"kind": int(_test_buf.mem_ops[i].kind),
-				"addr": int(_test_buf.mem_ops[i].addr),
-				"data": int(_test_buf.mem_ops[i].data),
-				"fc": int(_test_buf.mem_ops[i].fc),
-				"is_word": bool(_test_buf.mem_ops[i].is_word),
-			}
-			for i in range(_test_buf.mem_op_len)
-		]
-
-		return {
-			"name": _decode_ctr(_test_buf.name),
-			"model": int(_test_buf.model),
-			"seed": int(_test_buf.seed),
-			"op_words": [
-				int(_test_buf.op_words[i]) for i in range(int(_test_buf.op_word_count))
-			],
-			"pre": {
-				"regs": [int(_test_buf.pre.regs[i]) for i in range(REG_COUNT)],
-				"ram": pre_ram,
-			},
-			"post": {
-				"regs": [int(_test_buf.post.regs[i]) for i in range(REG_COUNT)],
-				"ram": post_ram,
-			},
-			"mem_ops": mem_ops,
-			"cycles": int(_test_buf.cycles),
-			"exec_result": int(_test_buf.exec_result),
-			"exception_vector": int(_test_buf.exception_vector),
-			"overflow": {
-				"mem_ops": bool(_test_buf.mem_ops_overflow),
-				"ram_diff": bool(_test_buf.ram_diff_overflow),
-				"touched_list": bool(_test_buf.touched_list_overflow),
-			},
-		}
+		return _test_buf.to_list()
 
 	def capture_pre(self) -> None:
 		_lib.cpu_capture_pre()

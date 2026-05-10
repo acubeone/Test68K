@@ -95,40 +95,6 @@ def _parse_args() -> argparse.Namespace:
 	return parser.parse_args()
 
 
-def _run_test_case(
-	cpu: wrapper.CPU,
-	id: int,
-	regs: list[int],
-	op_words: list[int],
-	ram: list[int],
-	model: int,
-	seed: int,
-) -> dict[str, Any]:
-	cpu.clear_ram()
-	cpu.begin_test_case(model, seed)
-	cpu.set_op_words(op_words)
-
-	for vec, long in enumerate(VECTORS):
-		base = vec * 4
-		cpu.write_word(base + 0, (long >> 16) & 0xFFFF)
-		cpu.write_word(base + 2, (long) & 0xFFFF)
-
-	cpu.write_block(ROM_ADDR[0], op_words)
-	cpu.write_block(RAM_ADDR[0], ram)
-
-	cpu.reset()
-	cpu.set_regs(regs)
-
-	disasm = cpu.disasm_at(ROM_ADDR[0])
-	cpu.set_test_case_name(f"{id} {disasm} {op_words[0]:x}")
-
-	cpu.capture_pre()
-	cpu.execute(CYCLES_BUDGET)
-	cpu.capture_post()
-
-	return cpu.query_test_case()
-
-
 def _rand_regs(rng: random.Random) -> list[int]:
 	regs = [rng.getrandbits(32) for _ in range(wrapper.REG_COUNT)]
 	regs[wrapper.REG_NAMES.index("pc")] = ROM_ADDR[0]
@@ -174,17 +140,19 @@ def _get_valid_opcodes(cpu: wrapper.CPU, model: int) -> list[int]:
 def _generate_batch(
 	cpu: wrapper.CPU, opcodes: list[int], max_tests: int, seed: int, model: int
 ) -> dict[str, list[Any]]:
+	if max_tests <= 0:
+		raise SystemExit("--max-tests must be > 0")
+
 	seed = seed or random.randint(0, sys.maxsize)
-	rng = random.Random(seed)
 
 	total = len(opcodes) * max_tests
 	done = 0
 	last = 0.0
 
-	batch: dict[str, list[Any]] = {}
+	result: dict[str, list[Any]] = {}
 	for opcode in opcodes:
 		# Update progress bar
-		done += 1
+		done += max_tests
 		now = time.monotonic()
 		if now - last >= 0.1 or done == total:
 			sys.stderr.write(f"\rGenerating... {hex(opcode)} [{done}/{total}]")
@@ -193,31 +161,45 @@ def _generate_batch(
 			sys.stderr.flush()
 			last = now
 
+		case_seed = seed ^ (opcode << 16)
+		rng = random.Random(case_seed)
+
 		op_words = [opcode]
-		for i in range(max_tests):
-			operands = [rng.getrandbits(32) for _ in range(wrapper.MAX_OP_WORDS)]
-			op_words.extend(operands)
+		operands = [rng.getrandbits(32) for _ in range(wrapper.MAX_OP_WORDS - 1)]
+		op_words.extend(operands)
 
-			regs = _rand_regs(rng)
-			ram = _rand_ram(rng)
+		regs = _rand_regs(rng)
+		ram = _rand_ram(rng, (RAM_ADDR[1] - RAM_ADDR[0]))
 
-			test = _run_test_case(cpu, i, regs, op_words, ram, model, seed)
+		request = {
+			"count": max_tests,
+			"seed": case_seed,
+			"model": model,
+			"cycles_budget": CYCLES_BUDGET,
+			"step_budget": 4,
+			"regs": regs,
+			"vectors": VECTORS,
+			"op_words": op_words,
+			"ram": ram,
+			"ram_start": RAM_ADDR[0],
+		}
+		batch = cpu.request_batch(request)
 
-			mnemonic = ""
-			exec_result = test.get("exec_result", wrapper.EXEC_OK)
-			if exec_result == wrapper.EXEC_ILLEGAL:
-				mnemonic = "illegal"
-			else:
-				test_name = str(test.get("name", ""))
-				if not test_name:
-					continue
-				mnemonic = _mnemonic_base(test_name)
-
-			if not mnemonic:
+		mnemonic = ""
+		exec_result = batch[0].get("exec_result", wrapper.EXEC_OK)
+		if exec_result == wrapper.EXEC_ILLEGAL:
+			mnemonic = "illegal"
+		else:
+			test_name = str(batch[0].get("name", ""))
+			if not test_name:
 				continue
-			batch.setdefault(mnemonic, []).append(test)
+			mnemonic = _mnemonic_base(test_name)
 
-	return batch
+		if not mnemonic:
+			continue
+		result.setdefault(mnemonic, []).extend(batch)
+
+	return result
 
 
 def _spit_file(out_dir: Path, name: str, tests: list[dict[str, Any]]) -> None:
@@ -230,6 +212,7 @@ def _spit_file(out_dir: Path, name: str, tests: list[dict[str, Any]]) -> None:
 
 def main() -> None:
 	args = _parse_args()
+
 	if not args.out.is_dir():
 		args.out.mkdir(parents=True, exist_ok=True)
 

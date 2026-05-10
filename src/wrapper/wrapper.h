@@ -17,7 +17,11 @@ enum {
 	CPU_MAX_MEM_OPS = 4096,
 	CPU_MAX_OP_WORDS = 16,
 
-	CPU_REG_COUNT = 19,
+	CPU_REG_COUNT = 25,
+	CPU_VEC_COUNT = 256,
+
+	CPU_ROM_ADDR = 0x00'1000,
+	CPU_RAM_ADDR = 0x01'0000,
 };
 
 typedef enum CPU_Model {
@@ -81,8 +85,26 @@ typedef struct CPU_TestCase {
 	bool touched_list_overflow;
 } CPU_TestCase;
 
+typedef struct CPU_BatchRequest {
+	u32 count;
+
+	u64 seed;
+	CPU_Model model;
+	u32 regs[CPU_REG_COUNT];
+	u32 cycles_budget;
+	u32 step_budget;
+
+	u32 vectors[CPU_VEC_COUNT];
+	u16 op_words[CPU_MAX_OP_WORDS];
+
+	u8 *ram;
+	u32 ram_size;
+} CPU_BatchRequest;
+
 bool cpu_init();
 void cpu_deinit();
+
+void cpu_request_batch(const CPU_BatchRequest *req, CPU_TestCase *batch[]);
 
 void cpu_begin_test_case(CPU_Model model, u64 seed);
 void cpu_query_test_case(CPU_TestCase *test);
@@ -102,7 +124,7 @@ u32 cpu_execute(u32 total_budget, u32 step_budget); // Return used cycles
 
 u32 cpu_get_reg(u8 reg);
 void cpu_set_reg(u8 reg, u32 data);
-void cpu_set_regs(u32 regs[CPU_REG_COUNT]);
+void cpu_set_regs(const u32 regs[CPU_REG_COUNT]);
 
 u8 cpu_read_byte(u32 addr);
 u16 cpu_read_word(u32 addr);
