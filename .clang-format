@@ -1,6 +1,6 @@
 ---
 BasedOnStyle: LLVM
-Language: C
+Language: Cpp
 
 AlignAfterOpenBracket: BlockIndent
 AlignConsecutiveMacros:
