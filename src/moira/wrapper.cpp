@@ -4,89 +4,82 @@
 
 #include <cassert>
 #include <cstdlib>
+#include <exception>
 #include <memory>
 
 namespace {
 
-class CPU : public moira::Moira {
+class CPU_Handler : public moira::Moira {
   private:
-	cpu_read8 m_read8 = nullptr;
-	cpu_read16 m_read16 = nullptr;
-	cpu_write8 m_write8 = nullptr;
-	cpu_write16 m_write16 = nullptr;
+	cpu_read8_t m_read8 = nullptr;
+	cpu_read16_t m_read16 = nullptr;
+	cpu_write8_t m_write8 = nullptr;
+	cpu_write16_t m_write16 = nullptr;
+	void *m_user;
 
   protected:
 	u8 read8(u32 addr) const override {
 		if (m_read8)
-			return m_read8(addr);
+			return m_read8(m_user, addr);
 
 		return 0;
 	}
 
 	u16 read16(u32 addr) const override {
 		if (m_read16)
-			return m_read16(addr);
+			return m_read16(m_user, addr);
 
 		return 0;
 	}
 
 	void write8(u32 addr, u8 val) const override {
 		if (m_write8)
-			m_write8(addr, val);
+			m_write8(m_user, addr, val);
 	}
 
 	void write16(u32 addr, u16 val) const override {
 		if (m_write16)
-			m_write16(addr, val);
+			m_write16(m_user, addr, val);
 	}
 
   public:
-	CPU() = default;
+	CPU_Handler(cpu_read8_t r8, cpu_read16_t r16, cpu_write8_t w8, cpu_write16_t w16)
+		: m_read8 { r8 }, m_read16 { r16 }, m_write8 { w8 }, m_write16 { w16 } { };
 
-	friend void ::cpu_set_read8_callback(cpu_read8 func);
-	friend void ::cpu_set_read16_callback(cpu_read16 func);
-	friend void ::cpu_set_write8_callback(cpu_write8 func);
-	friend void ::cpu_set_write16_callback(cpu_write16 func);
+	void set_userdata(void *user) {
+		m_user = user;
+	}
 };
 
 } // namespace
 
-static std::unique_ptr<CPU> _cpu = nullptr;
+struct cpu_t {
+	std::unique_ptr<CPU_Handler> handler;
+};
 
-void cpu_init() {
-	if (_cpu)
-		return;
+cpu_t *cpu_create(cpu_read8_t r8, cpu_read16_t r16, cpu_write8_t w8, cpu_write16_t w16) {
+	cpu_t *cpu = nullptr;
 
-	_cpu = std::make_unique<CPU>();
-	if (!_cpu)
-		exit(EXIT_FAILURE);
+	try {
+		cpu = new cpu_t();
+		cpu->handler = std::make_unique<CPU_Handler>(r8, r16, w8, w16);
+	} catch (std::exception& e) {
+		return nullptr;
+	}
+
+	return cpu;
 }
 
-void cpu_deinit() {
-	if (_cpu)
-		_cpu = nullptr;
+void cpu_destroy(cpu_t *cpu) {
+	if (!cpu)
+		return;
+
+	delete cpu;
 }
 
-void cpu_set_read8_callback(cpu_read8 func) {
-	if (!_cpu)
+void cpu_set_userdata(cpu_t *cpu, void *userdata) {
+	if (!cpu)
 		return;
-	_cpu->m_read8 = func;
-}
 
-void cpu_set_read16_callback(cpu_read16 func) {
-	if (!_cpu)
-		return;
-	_cpu->m_read16 = func;
-}
-
-void cpu_set_write8_callback(cpu_write8 func) {
-	if (!_cpu)
-		return;
-	_cpu->m_write8 = func;
-}
-
-void cpu_set_write16_callback(cpu_write16 func) {
-	if (!_cpu)
-		return;
-	_cpu->m_write16 = func;
+	cpu->handler->set_userdata(userdata);
 }

@@ -18,20 +18,17 @@ typedef int16_t i16;
 typedef int32_t i32;
 typedef int64_t i64;
 
-typedef u8 (*cpu_read8)(u32);
-typedef u16 (*cpu_read16)(u32);
+typedef struct cpu_t cpu_t;
 
-typedef void (*cpu_write8)(u32, u8);
-typedef void (*cpu_write16)(u32, u16);
+typedef u8 (*cpu_read8_t)(void *user, u32 addr);
+typedef u16 (*cpu_read16_t)(void *user, u32 addr);
+typedef void (*cpu_write8_t)(void *user, u32 addr, u8 byte);
+typedef void (*cpu_write16_t)(void *user, u32 addr, u16 word);
 
-void cpu_init();
-void cpu_deinit();
+cpu_t *cpu_create(cpu_read8_t r8, cpu_read16_t r16, cpu_write8_t w8, cpu_write16_t w16);
+void cpu_destroy(cpu_t *cpu);
 
-void cpu_set_read8_callback(cpu_read8 func);
-void cpu_set_read16_callback(cpu_read16 func);
-
-void cpu_set_write8_callback(cpu_write8 func);
-void cpu_set_write16_callback(cpu_write16 func);
+void cpu_set_userdata(cpu_t *cpu, void *userdata);
 
 #ifdef __cplusplus
 }

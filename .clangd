@@ -4,7 +4,7 @@ If:
 CompileFlags:
     Add: [-xc++]
     Compiler: clang++
-    CompilationDatabase: .cache
+    CompilationDatabase: .zig-cache
 Diagnostics:
     UnusedIncludes: Strict
     MissingIncludes: Strict
@@ -59,6 +59,7 @@ CompileFlags:
     Add: [-xc, -std=c11]
     Remove: [-std=c++20]
     Compiler: clang
+    CompilationDatabase: .zig-cache
 Diagnostics:
     UnusedIncludes: Strict
     MissingIncludes: Strict

@@ -24,32 +24,12 @@ fn _link_moira(b: *std.Build, target: ResolvedTarget, optimize: OptimizeMode) *C
         .files = &.{
             "vendor/Moira/Moira.cpp",
             "vendor/Moira/MoiraDebugger.cpp",
-            "src/moira/wrapper.cpp",
         },
-        .flags = &.{ "-std=c++20", "-O2", "-gen-cdb-fragment-path", ".cache/cdb" },
+        .flags = &.{ "-std=c++20", "-O2", "-gen-cdb-fragment-path", ".zig-cache/cdb" },
         .language = .cpp,
     });
     moira.installHeadersDirectory(b.path("vendor/Moira"), "", .{});
     b.installArtifact(moira);
-
-    // Generate compile_commands.json since Zig can't do it for some reason
-    const cdb = b.addSystemCommand(&.{
-        "sh", "-c",
-        \\set -eu
-        \\mkdir -p .cache/cdb
-        \\{
-        \\  printf '['
-        \\  first=1
-        \\  find .cache/cdb -type f | sort | while IFS= read -r f; do
-        \\    [ -f "$f" ] || continue
-        \\    if [ $first -eq 0 ]; then printf ','; fi
-        \\    first=0
-        \\    cat "$f"
-        \\  done
-        \\  printf ']'
-        \\} > compile_commands.json
-    });
-    cdb.step.dependOn(&moira.step);
 
     return moira;
 }
@@ -83,11 +63,46 @@ pub fn build(b: *std.Build) void {
         .use_llvm = true,
     });
     exe.root_module.linkLibrary(moira);
-    b.installArtifact(exe);
+    exe.root_module.addCSourceFiles(.{
+        .files = &.{
+            "src/moira/wrapper.h",
+            "src/moira/wrapper.cpp",
+        },
+        .language = .cpp,
+        .flags = &.{ "-std=c++20", "-O2", "-gen-cdb-fragment-path", ".zig-cache/cdb" },
+    });
 
+    b.installArtifact(exe);
     const run_exe = b.addRunArtifact(exe);
     if (b.args) |args|
         run_exe.addArgs(args);
 
     _ = b.step("run", "Run generator").dependOn(&run_exe.step);
+
+    // Generate compile_commands.json since Zig can't do it for some reason
+
+    const cdb = b.addSystemCommand(&.{
+        "sh", "-c",
+        \\set -eu
+        \\fragdir=.zig-cache/cdb
+        \\out=.zig-cache/compile_commands.json
+        \\tmp=.zig-cache/compile_commands.json.tmp
+        \\mkdir -p "$fragdir"
+        \\{
+        \\  printf '[\n'
+        \\  first=1
+        \\  find "$fragdir" -type f | sort | while IFS= read -r f; do
+        \\    [ -f "$f" ] || continue
+        \\    if [ "$first" -eq 0 ]; then printf ',\n'; fi
+        \\    first=0
+        \\    cat "$f"
+        \\  done
+        \\  printf '\n]\n'
+        \\} > "$tmp"
+        \\mv "$tmp" "$out"
+    });
+    cdb.step.dependOn(&exe.step);
+
+    run_exe.step.dependOn(&cdb.step);
+    b.getInstallStep().dependOn(&cdb.step);
 }
