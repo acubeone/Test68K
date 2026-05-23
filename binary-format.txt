@@ -14,29 +14,31 @@ file-format:
 	[blobN]
 
 
-[header]
+[header - 32-bytes]
 header + 0x00 -> MAGIC_WORD : u8[4]
 	content: 0x54 0x36 0x38 0x4b ; ASCII: T68K
-header + 0x04 -> VERSION : u16
-	content: 0x01 0x00 ; Version 1
-header + 0x06 -> RESERVED : u8[2]
-	content: 0x00 0x00
-header + 0x08 -> ENTRY_COUNT : u32
+header + 0x04 -> VERSION : u8
+	content: 0x02 ; Version 2
+header + 0x05 -> CPU_MODEL : u8
+	content: 0=68000, 1=68010
+header + 0x06 -> RESERVED : u8[10]
+	content: 0x00 0x00 0x00 0x00 ... 0x00
+header + 0x10 -> SEED : u64
+	content: Random seed used for test generation
+header + 0x18 -> ENTRY_COUNT : u32
 	content: 0xffff_ffff is unknown/streaming
-header + 0x0c -> RESERVED : u8[4]
+header + 0x1c -> RESERVED : u8[4]
 	content: 0x00 0x00 0x00 0x00
 
 [entry]
 entry + 0x00 -> MAGIC_WORD : u8[4]
-	content: 0x54 0x43 0x53 0x31 ; ASCII: TCS1
+	content: 0x54 0x43 0x53 0x32 ; ASCII: TCS2
 entry + 0x04 -> ENTRY_LEN : u32
 	content: blob bytes length (includes padding)
 entry + 0x08 -> BLOB : variable
 	content: [blob]
 
 [blob - ordered]
-	seed : u64
-	model : u32 (0=68000, 1=68010)
 	name_len : u32
 	name : u8[name_len] ; ASCII non-null terminated string
 	padding : u8[] ; align to 4-bytes boundary
@@ -57,14 +59,11 @@ entry + 0x08 -> BLOB : variable
 	mem_ops : [mem_op][mem_op_len]
 
 	cycles : u32
-	exception_vector : u16 (vector index, 0 if none)
-	exec_result : u16 (0=ok, 1=illegal, 2=linea, 3=linef, 4=addr, 5=trap, 6=tas, 7=other)
-
-	flags : u32
-		bit0 : mem_ops_overflow
-		bit1 : ram_diff_overflow
-		bit2 : touched_list_overflow
-		bit3..bitN : zeroed
+	exception_vector : u16 ; vector index, 0 if none
+	exception_kind : u16 ; 0=ok, 1=bus_err, 2=addr_err, 3=illegal,
+						 ; 4=div_by_zero, 5=chk, 6=trapv, 7=privilege,
+						 ; 8=trace, 9=linea, 10=linef, 11=format_err,
+						 ; 12=irq_uninit, 13=irq_spurious, 14=trap, 15=bkpt
 
 [ram - ordered]
 	addr : u32
@@ -73,8 +72,6 @@ entry + 0x08 -> BLOB : variable
 
 [mem_op - ordered]
 	addr : u32
-	data : u32
-	kind : u8 (0=read, 1=write)
-	size : u8 (0=byte, 1=word)
-	fc : u8
+	data : u16
+	flags : u8 ; bit0: (0=read, 1=write); bit1: (0=byte, 1=word); bit6-4: 3-bit FC
 	padding : u8 = 0x00
