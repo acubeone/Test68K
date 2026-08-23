@@ -50,9 +50,8 @@ enum cpu_registers_t {
 
 	CPU_REG_PC,
 	CPU_REG_SR,
-	CPU_REG_SP,
 	CPU_REG_USP,
-	CPU_REG_ISP,
+	CPU_REG_SSP,
 	CPU_REG_VBR,
 	CPU_REG_SFC,
 	CPU_REG_DFC,

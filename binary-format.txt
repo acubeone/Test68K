@@ -5,6 +5,7 @@
 
 file-format:
 	[header]
+	[env]
 	[entry0]
 	[blob0]
 	[entry1]
@@ -30,7 +31,17 @@ header + 0x18 -> ENTRY_COUNT : u32
 header + 0x1c -> RESERVED : u8[4]
 	content: 0x00 0x00 0x00 0x00
 
-[entry]
+[env - variable]
+env + 0x00 -> RAM_LEN : u16
+	content: TCS only uses 64KB RAM region padded to 4-bytes boundary
+env + 0x02 -> RESERVED : u8[2]
+	content: 0x00 0x00
+env + 0x04 -> RAM_BASE : u32
+	content: Base address of RAM. Most significant byte must be 0x00
+env + 0x08 -> RAM_CONTENT : variable
+	content: u8[RAM_LEN] ; It should start at RAM_BASE address
+
+[entry - variable]
 entry + 0x00 -> MAGIC_WORD : u8[4]
 	content: 0x54 0x43 0x53 0x32 ; ASCII: TCS2
 entry + 0x04 -> ENTRY_LEN : u32
@@ -47,13 +58,13 @@ entry + 0x08 -> BLOB : variable
 	op_words : u16[op_word_count]
 	padding : u8[] ; align to 4-bytes boundary
 
-	pre_regs : u32[19]
-	pre_ram_len : u32
-	pre_ram : [ram][pre_ram_len]
+	pre_regs : u32[23] ; [D0..A7, PC, SR, USP, SSP, VBR, SFC, DFC]
+	pre_mem_len : u32
+	pre_mem : [ram][pre_mem_len] ; Opcode write diff + optional entropy
 
-	post_regs : u32[19]
-	post_ram_len : u32
-	post_ram : [ram][post_ram_len]
+	post_regs : u32[23] ; [D0..A7, PC, SR, USP, SSP, VBR, SFC, DFC]
+	post_mem_len : u32
+	post_mem : [mem][post_mem_len] ; Diff from pre_ram
 
 	mem_op_len : u32
 	mem_ops : [mem_op][mem_op_len]
@@ -65,7 +76,7 @@ entry + 0x08 -> BLOB : variable
 						 ; 8=trace, 9=linea, 10=linef, 11=format_err,
 						 ; 12=irq_uninit, 13=irq_spurious, 14=trap, 15=bkpt
 
-[ram - ordered]
+[mem - ordered]
 	addr : u32
 	byte : u8
 	padding: u8[3] = 0x00 0x00 0x00
@@ -73,5 +84,5 @@ entry + 0x08 -> BLOB : variable
 [mem_op - ordered]
 	addr : u32
 	data : u16
-	flags : u8 ; bit0: (0=read, 1=write); bit1: (0=byte, 1=word); bit6-4: 3-bit FC
+	flags : u8 ; bit0: (0=read, 1=write); bit1: (0=byte, 1=word); bit5-7: 3-bit FC
 	padding : u8 = 0x00
