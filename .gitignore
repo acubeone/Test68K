@@ -1,9 +1,10 @@
 # Directiories
 .cache/
 .github/
-.zig-cache/
-zig-pkg/
-zig-out/
+build/
+__pycache__
+tests/src/output/
 
 # Files
 .gdb_history
+tests/src/sst_all.h
