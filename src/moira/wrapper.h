@@ -84,14 +84,14 @@ void cpu_destroy(cpu_t *cpu);
 void cpu_set_userdata(cpu_t *cpu, void *userdata);
 
 void cpu_reset(cpu_t *cpu, enum cpu_model_t cpu_model);
-void cpu_execute(cpu_t *cpu, i64 cycles);
+void cpu_execute(cpu_t *cpu);
 
 bool cpu_is_instruction_valid(const cpu_t *cpu, u16 opcode, u16 ext);
 
 i32 cpu_disassemble(const cpu_t *cpu, char *str, u32 addr);
 
 void cpu_get_registers(const cpu_t *cpu, u32 *out);
-void cpu_set_registers(cpu_t *cpu, u32 *regs);
+void cpu_set_registers(cpu_t *cpu, const u32 *regs);
 
 i64 cpu_get_clock(const cpu_t *cpu);
 void cpu_set_clock(cpu_t *cpu, i64 cycles);

@@ -132,11 +132,11 @@ void cpu_reset(cpu_t *cpu, enum cpu_model_t cpu_model) {
 	(*cpu->handler).reset();
 }
 
-void cpu_execute(cpu_t *cpu, i64 cycles) {
+void cpu_execute(cpu_t *cpu) {
 	if (!cpu)
 		return;
 
-	cpu->handler->execute(cycles);
+	cpu->handler->execute();
 }
 
 bool cpu_is_instruction_valid(const cpu_t *cpu, u16 opcode, u16 ext) {
@@ -175,7 +175,7 @@ void cpu_get_registers(const cpu_t *cpu, u32 *out) {
 	out[CPU_REG_DFC] = cpu->handler->getDFC();
 }
 
-void cpu_set_registers(cpu_t *cpu, u32 *regs) {
+void cpu_set_registers(cpu_t *cpu, const u32 *regs) {
 	assert(regs);
 
 	if (!cpu)
@@ -186,14 +186,14 @@ void cpu_set_registers(cpu_t *cpu, u32 *regs) {
 		cpu->handler->setA(i, regs[i + CPU_REG_A0]);
 	}
 
-	cpu->handler->setPC(regs[CPU_REG_PC]);
-	cpu->handler->setSR(regs[CPU_REG_SR]);
-	cpu->handler->setSP(regs[CPU_REG_SP]);
-	cpu->handler->setUSP(regs[CPU_REG_USP]);
-	cpu->handler->setISP(regs[CPU_REG_ISP]);
-	cpu->handler->setVBR(regs[CPU_REG_VBR]);
-	cpu->handler->setSFC(regs[CPU_REG_SFC]);
-	cpu->handler->setDFC(regs[CPU_REG_DFC]);
+	// cpu->handler->setPC(regs[CPU_REG_PC]);
+	// cpu->handler->setSR(regs[CPU_REG_SR]);
+	// cpu->handler->setSP(regs[CPU_REG_SP]);
+	// cpu->handler->setUSP(regs[CPU_REG_USP]);
+	// cpu->handler->setISP(regs[CPU_REG_ISP]);
+	// cpu->handler->setVBR(regs[CPU_REG_VBR]);
+	// cpu->handler->setSFC(regs[CPU_REG_SFC]);
+	// cpu->handler->setDFC(regs[CPU_REG_DFC]);
 }
 
 i64 cpu_get_clock(const cpu_t *cpu) {

@@ -80,7 +80,6 @@ pub fn build(b: *std.Build) void {
     _ = b.step("run", "Run generator").dependOn(&run_exe.step);
 
     // Generate compile_commands.json since Zig can't do it for some reason
-
     const cdb = b.addSystemCommand(&.{
         "sh", "-c",
         \\set -eu
