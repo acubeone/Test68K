@@ -5,7 +5,6 @@
 
 file-format:
 	[header]
-	[env]
 	[entry0]
 	[blob0]
 	[entry1]
@@ -31,16 +30,6 @@ header + 0x18 -> ENTRY_COUNT : u32
 header + 0x1c -> RESERVED : u8[4]
 	content: 0x00 0x00 0x00 0x00
 
-[env - variable]
-env + 0x00 -> RAM_LEN : u16
-	content: TCS only uses 64KB RAM region padded to 4-bytes boundary
-env + 0x02 -> RESERVED : u8[2]
-	content: 0x00 0x00
-env + 0x04 -> RAM_BASE : u32
-	content: Base address of RAM. Most significant byte must be 0x00
-env + 0x08 -> RAM_CONTENT : variable
-	content: u8[RAM_LEN] ; It should start at RAM_BASE address
-
 [entry - variable]
 entry + 0x00 -> MAGIC_WORD : u8[4]
 	content: 0x54 0x43 0x53 0x32 ; ASCII: TCS2
@@ -59,27 +48,25 @@ entry + 0x08 -> BLOB : variable
 	padding : u8[] ; align to 4-bytes boundary
 
 	pre_regs : u32[23] ; [D0..A7, PC, SR, USP, SSP, VBR, SFC, DFC]
-	pre_mem_len : u32
-	pre_mem : [ram][pre_mem_len] ; Opcode write diff + optional entropy
+	pre_ram_len : u32
+	pre_ram : [ram_slice][pre_ram_len] ; Opcode, operands, prefetch and stack frame
 
 	post_regs : u32[23] ; [D0..A7, PC, SR, USP, SSP, VBR, SFC, DFC]
-	post_mem_len : u32
-	post_mem : [mem][post_mem_len] ; Diff from pre_ram
+	post_ram_len : u32
+	post_ram : [ram_slice][post_ram_len] ; Diff from pre_ram
 
 	mem_op_len : u32
 	mem_ops : [mem_op][mem_op_len]
 
 	cycles : u32
 	exception_vector : u16 ; vector index, 0 if none
-	exception_kind : u16 ; 0=ok, 1=bus_err, 2=addr_err, 3=illegal,
-						 ; 4=div_by_zero, 5=chk, 6=trapv, 7=privilege,
-						 ; 8=trace, 9=linea, 10=linef, 11=format_err,
-						 ; 12=irq_uninit, 13=irq_spurious, 14=trap, 15=bkpt
+	padding : u8[2] = 0x00 0x00
 
-[mem - ordered]
+[ram_slice - ordered]
 	addr : u32
-	byte : u8
-	padding: u8[3] = 0x00 0x00 0x00
+	len : u32
+	data : u8[len]
+	padding : u8[] ; align to 4-bytes boundary
 
 [mem_op - ordered]
 	addr : u32
