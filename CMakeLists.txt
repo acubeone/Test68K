@@ -1,11 +1,14 @@
 cmake_minimum_required(VERSION 3.29)
 project(
-	test68k
+	tcs
 	VERSION 0.1.0
 	LANGUAGES CXX
 )
 
 option(WARNINGS_AS_ERRORS "Treat compiler warnings as errors." ON)
+
+option(BUILD_TESTS "Build unit tests" ON)
+
 option(ENABLE_SANITIZERS "Enable sanitizers" ON)
 option(ENABLE_CCACHE "Enable CCache" ON)
 
@@ -25,7 +28,7 @@ endif()
 target_compile_features(
 	${PROJECT_NAME}
 	PRIVATE
-		cxx_std_20
+		cxx_std_23
 )
 
 target_sources(
@@ -33,6 +36,7 @@ target_sources(
 	PRIVATE
 		"${CMAKE_SOURCE_DIR}/vendor/Moira/Moira.cpp"
 		"${CMAKE_SOURCE_DIR}/vendor/Moira/MoiraDebugger.cpp"
+		"${CMAKE_SOURCE_DIR}/src/Bus.cpp"
 		"${CMAKE_SOURCE_DIR}/src/main.cpp"
 )
 
@@ -49,3 +53,15 @@ set_source_files_properties(
 	PROPERTIES
 	COMPILE_OPTIONS "-w"
 )
+
+target_compile_definitions(
+	${PROJECT_NAME}
+	PRIVATE
+		"-DEMULATE_ADDRESS_ERROR=1"
+		"-DEMULATE_FC=1"
+		"-DENABLE_DASM=1"
+)
+
+if(BUILD_TESTS)
+	add_subdirectory("${CMAKE_SOURCE_DIR}/tests")
+endif()
