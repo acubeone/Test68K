@@ -61,17 +61,22 @@ private:
 public:
 	Bus();
 
-	void clear_ram();
+	void clear();
 
 	u8 read_byte(u32 addr, u8 fc);
 	u16 read_word(u32 addr, u8 fc);
 
 	void write_byte(u32 addr, u8 byte, u8 fc);
 	void write_word(u32 addr, u16 word, u8 fc);
+	void write_long(u32 addr, u32 long_, u8 fc);
 
-	void write_block(u32 addr, std::span<const u8> bytes, u8 fc);
+	void write_block(u32 addr, std::span<const u16> words, u8 fc);
 
 	void gen_diff(std::vector<RamSlice>& pre, std::vector<RamSlice>& post);
+
+	[[nodiscard]] std::span<const MemOp> query_operations() {
+		return m_mem_ops;
+	}
 
 private:
 	void _register_access(u32 addr, u16 data, bool is_word, bool is_write, u8 fc);

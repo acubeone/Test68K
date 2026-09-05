@@ -16,7 +16,7 @@ function(add_test_executable test)
 		PARSE_ARGV 1 TEST
 		""
 		""
-		"SOURCES;INCLUDE_DIRS"
+		"SOURCES;INCLUDE_DIRS;LIBRARIES"
 	)
 
 	if(NOT TEST_SOURCES OR TEST_SOURCES STREQUAL "")
@@ -35,6 +35,10 @@ function(add_test_executable test)
 	target_include_directories(${test} PRIVATE "../src")
 
 	target_sources(${test} PRIVATE ${TEST_SOURCES})
+
+	if(TEST_LIBRARIES)
+		target_link_libraries(${test} PRIVATE ${TEST_LIBRARIES})
+	endif()
 
 	# Enable code sanitizers
 	if(ENABLE_SANITIZERS)
@@ -56,4 +60,14 @@ add_test_executable(
 	SOURCES
 		"../src/Bus.cpp"
 		"src/test_bus.cpp"
+)
+
+add_test_executable(
+	test_job
+	SOURCES
+		"../src/Bus.cpp"
+		"../src/Job.cpp"
+		"src/test_job.cpp"
+	LIBRARIES
+		moira
 )

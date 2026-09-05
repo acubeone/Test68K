@@ -29,17 +29,16 @@
 #include <span>
 #include <vector>
 
+static constexpr auto _DEFAULT_RAM_SIZE = 64 * 1024; // Default ram size: 64KB
+
 namespace tcs {
 
 Bus::Bus() {
-	m_pre_ram.resize(64 * 1024);
-	m_ram.resize(64 * 1024); // Default ram size: 64KB
+	m_ram.resize(_DEFAULT_RAM_SIZE);
+	m_pre_ram.resize(_DEFAULT_RAM_SIZE);
 }
 
-void Bus::clear_ram() {
-	std::ranges::fill(m_ram, 0);
-	std::ranges::fill(m_pre_ram, 0);
-
+void Bus::clear() {
 	m_pre_set.clear();
 	m_touched_set.clear();
 	m_touched_list.clear();
@@ -94,18 +93,28 @@ void Bus::write_word(u32 addr, u16 word, u8 fc) {
 	_register_access(addr, word, true, true, fc);
 }
 
-void Bus::write_block(u32 addr, std::span<const u8> bytes, u8 fc) {
-	for (u8 byte : bytes) {
-		addr &= 0x0000'ffff;
+void Bus::write_long(u32 addr, u32 long_, u8 fc) {
+	write_word(addr + 0, static_cast<u16>(long_ >> 16), fc);
+	write_word(addr + 2, static_cast<u16>(long_ & 0xffff), fc);
+}
 
-		if (!capture_enabled)
-			_track_pre(addr, m_ram[addr]);
-		_track_touched(addr);
+void Bus::write_block(u32 addr, std::span<const u16> words, u8 fc) {
+	for (u16 word : words) {
+		u32 hi_addr = (addr + 0) & 0xffff;
+		u32 lo_addr = (addr + 1) & 0xffff;
 
-		m_ram[addr] = byte;
-		_register_access(addr, (u16)byte, false, true, fc);
+		if (!capture_enabled) {
+			_track_pre(hi_addr, m_ram[hi_addr]);
+			_track_pre(lo_addr, m_ram[lo_addr]);
+		}
+		_track_touched(hi_addr);
+		_track_touched(lo_addr);
 
-		addr += 1;
+		m_ram[hi_addr] = (word >> 8) & 0xff;
+		m_ram[lo_addr] = word & 0xff;
+		_register_access(addr, word, true, true, fc);
+
+		addr += 2;
 	}
 }
 

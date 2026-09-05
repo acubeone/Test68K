@@ -23,7 +23,10 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
+
+using usize = std::size_t;
 
 using u8 = std::uint8_t;
 using u16 = std::uint16_t;

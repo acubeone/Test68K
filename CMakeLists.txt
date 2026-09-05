@@ -15,6 +15,8 @@ option(ENABLE_CCACHE "Enable CCache" ON)
 include("cmake/base.cmake")
 include("cmake/warnings.cmake")
 
+add_subdirectory("vendor/Moira")
+
 add_executable(${PROJECT_NAME})
 set_default_warnings(${PROJECT_NAME})
 enable_tools(${PROJECT_NAME})
@@ -31,35 +33,20 @@ target_compile_features(
 		cxx_std_23
 )
 
+target_link_libraries(${PROJECT_NAME} PRIVATE moira)
+
 target_sources(
 	${PROJECT_NAME}
 	PRIVATE
-		"${CMAKE_SOURCE_DIR}/vendor/Moira/Moira.cpp"
-		"${CMAKE_SOURCE_DIR}/vendor/Moira/MoiraDebugger.cpp"
 		"${CMAKE_SOURCE_DIR}/src/Bus.cpp"
+		"${CMAKE_SOURCE_DIR}/src/Job.cpp"
 		"${CMAKE_SOURCE_DIR}/src/main.cpp"
 )
 
 target_include_directories(
 	${PROJECT_NAME}
 	PRIVATE
-		"${CMAKE_SOURCE_DIR}/vendor/Moira"
 		"${CMAKE_SOURCE_DIR}/src"
-)
-
-set_source_files_properties(
-	"${CMAKE_SOURCE_DIR}/vendor/Moira/Moira.cpp"
-	"${CMAKE_SOURCE_DIR}/vendor/Moira/MoiraDebugger.cpp"
-	PROPERTIES
-	COMPILE_OPTIONS "-w"
-)
-
-target_compile_definitions(
-	${PROJECT_NAME}
-	PRIVATE
-		"-DEMULATE_ADDRESS_ERROR=1"
-		"-DEMULATE_FC=1"
-		"-DENABLE_DASM=1"
 )
 
 if(BUILD_TESTS)
