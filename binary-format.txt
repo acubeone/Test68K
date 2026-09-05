@@ -39,12 +39,13 @@ entry + 0x08 -> BLOB : variable
 	content: [blob]
 
 [blob - ordered]
+	instr : u16[12] ; instruction words: 1 opcode + 0-4 extension-words + zero-fill
+	cycles : u32
+	exception_vector : u16 ; vector index, 0 if none
+	padding : u8[2] = 0x00 0x00
+
 	name_len : u32
 	name : u8[name_len] ; ASCII non-null terminated string
-	padding : u8[] ; align to 4-bytes boundary
-
-	op_word_count : u32
-	op_words : u16[op_word_count]
 	padding : u8[] ; align to 4-bytes boundary
 
 	pre_regs : u32[23] ; [D0..A7, PC, SR, USP, SSP, VBR, SFC, DFC]
@@ -57,10 +58,6 @@ entry + 0x08 -> BLOB : variable
 
 	mem_op_len : u32
 	mem_ops : [mem_op][mem_op_len]
-
-	cycles : u32
-	exception_vector : u16 ; vector index, 0 if none
-	padding : u8[2] = 0x00 0x00
 
 [ram_slice - ordered]
 	addr : u32
